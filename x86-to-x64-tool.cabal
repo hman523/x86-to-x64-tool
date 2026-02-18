@@ -137,4 +137,5 @@ test-suite x86-to-x64-tool-test
         language-c,
         bytestring,
         hspec,
-        hspec-contrib
+        hspec-contrib,
+        syb
