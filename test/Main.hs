@@ -1,4 +1,8 @@
-module Main (main) where
+module Main where
+
+import Test.Hspec
+import Parser.ParserTests (parserSpec)
 
 main :: IO ()
-main = putStrLn "Test suite not yet implemented."
+main = hspec $ do
+  parserSpec
