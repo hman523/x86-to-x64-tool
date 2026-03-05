@@ -1,6 +1,8 @@
 module Analysis.Analysis where 
 
-data Issue = ConstantLiteralIssue
+import Language.C.Syntax.AST
+import Analysis.UtilTypes
+import Analysis.TypeSize
 
-
-Analysis :: CTranslUnit -> [Issue]
+analysis :: CTranslUnit -> [Issue]
+analysis = undefined

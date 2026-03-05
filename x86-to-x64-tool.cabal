@@ -61,7 +61,11 @@ library
     -- Modules exported by the library.
     exposed-modules:  
         X86_to_X64,
-        Parser.Parser
+        Parser.Parser,
+        Analysis.TypeSize,
+        Analysis.Analysis,
+        Analysis.UtilTypes
+
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -73,7 +77,8 @@ library
     build-depends:    
         base ^>=4.18.3.0,
         language-c,
-        bytestring
+        bytestring,
+        containers
 
 
     -- Directories containing source files.
@@ -128,7 +133,10 @@ test-suite x86-to-x64-tool-test
     -- The entrypoint to the test suite.
     main-is:          Main.hs
 
-    other-modules:    Parser.ParserTests
+    other-modules:    
+        Parser.ParserTests,
+        Analysis.AnalysisTests,
+        Analysis.TypeSizeTests
     -- Test dependencies.
     build-depends:
         base ^>=4.18.3.0,
