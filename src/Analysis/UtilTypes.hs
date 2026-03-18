@@ -5,8 +5,7 @@ import Language.C.Data.Node
 import Language.C.Data.Ident
 import Data.Char (toUpper)
 import qualified Data.Map as Map
-
-type VarContext = Map.Map String Bool
+import Analysis.TypeChecker (TypeEnv, CType(..), collectDecl, resolveType)
 
 data Severity = Critical | Warning | Low deriving (Show, Eq)
 
@@ -95,7 +94,6 @@ data Category
     | TypeSizeIssue
     deriving (Show,Eq)
 
-
 getCategory :: IssueTag -> Category
 getCategory tag = case tag of 
     -- Alignment Issues
@@ -167,13 +165,12 @@ getCategory tag = case tag of
     UsingIntAsPtrdifft -> TypeSizeIssue
     UsingUIntAsMemSize -> TypeSizeIssue
 
-
 data Issue = Issue
-    { issuePos :: NodeInfo
+    { issuePos      :: NodeInfo
     , issueSeverity :: Severity
-    , issueType :: IssueTag
-    , catagory :: Category
-    , code :: Maybe String
+    , issueType     :: IssueTag
+    , catagory      :: Category
+    , code          :: Maybe String
     }
 
 instance Show Issue where
@@ -182,126 +179,99 @@ instance Show Issue where
         ++ " at " ++ show (issuePos i)
         ++ "\nCode: " ++ show (code i)
 
-getCode :: CTranslUnit -> NodeInfo -> Maybe String
-getCode (CTranslUnit decls _) nodeInfo = 
-    case extractCodeSnippet <$> findDeclAtPosition decls nodeInfo of
-        Just snippet -> Just snippet
-        Nothing -> Nothing
-
-findDeclAtPosition :: [CExternalDeclaration NodeInfo] -> NodeInfo -> Maybe (CExternalDeclaration NodeInfo)
-findDeclAtPosition decls targetInfo = 
-    case filter (samePosition targetInfo) decls of
-        (decl:_) -> Just decl
-        _ -> Nothing
-  where
-    samePosition target (CFDefExt (CFunDef _ _ _ _ info)) = 
-        target == info
-    samePosition target (CDeclExt (CDecl _ _ info)) = 
-        target == info
-    samePosition _ _ = False
-
-extractCodeSnippet :: CExternalDeclaration a -> String
-extractCodeSnippet (CFDefExt (CFunDef _ _ declrs _ _)) =
-    case declrs of
-        (CDecl _ declrs' _:_) ->
-            case declrs' of
-                ((Just (CDeclr (Just (Ident fname _ _)) _ _ _ _), _, _):_) -> 
-                    "In function: " ++ fname
-                _ -> "Unknown function"
-        _ -> "Unknown function"
-extractCodeSnippet (CDeclExt (CDecl _ declrs _)) =
-    case declrs of
-        ((Just (CDeclr (Just (Ident vname _ _)) _ _ _ _), _, _):_) -> 
-            "Variable: " ++ vname
-        _ -> "Unknown declaration"
-extractCodeSnippet _ = "Unknown code"
-
 createIssue :: CTranslUnit -> NodeInfo -> Severity -> IssueTag -> Issue
-createIssue _ pos sev tag = Issue pos sev tag (getCategory tag) (getCode undefined pos)
+createIssue _ pos sev tag = Issue pos sev tag (getCategory tag) Nothing
 
+-- ---------------------------------------------------------------------------
+-- AST traversal helpers
+-- ---------------------------------------------------------------------------
 
-isIntType :: CDeclaration a -> Bool
-isIntType (CDecl [CTypeSpec (CIntType _)] _ _) = True
-isIntType (CDecl [CTypeSpec (CUnsigType _), CTypeSpec (CIntType _)] _ _) = True
-isIntType (CDecl [CTypeSpec (CIntType _), CTypeSpec (CUnsigType _)] _ _) = True
-isIntType _ = False
-
-exprMightBePointerWithContext :: VarContext -> CExpression a -> Bool
-exprMightBePointerWithContext ctx expr = case expr of
-    CVar (Ident name _ _) _ -> Map.findWithDefault False name ctx
-    CUnary CIndOp _ _ -> True
-    CUnary CAdrOp _ _ -> True
-    CCast decl _ _ -> isPtrDecl decl
-    _ -> False
-  where
-    isPtrDecl (CDecl _ declrs _) = any (containsPtr . fst3) declrs
-    fst3 (a, _, _) = a
-    
-    containsPtr Nothing = False
-    containsPtr (Just decl) = hasPtr decl
-    
-    hasPtr (CDeclr _ derived _ _ _) = any isPtrDerived derived
-    
-    isPtrDerived (CPtrDeclr _ _) = True
-    isPtrDerived _ = False
-
-analyzeDecl :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CExternalDeclaration a -> [Issue]
+analyzeDecl :: (TypeEnv -> CExpression a -> [Issue]) 
+            -> TypeEnv 
+            -> CExternalDeclaration a 
+            -> [Issue]
 analyzeDecl f ctx (CFDefExt funDef) = analyzeFunDef f ctx funDef
-analyzeDecl _ _ (CDeclExt _) = []
-analyzeDecl _ _ _ = []
+analyzeDecl _ _ (CDeclExt _)        = []
+analyzeDecl _ _ _                   = []
 
-analyzeFunDef :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CFunctionDef a -> [Issue]
+analyzeFunDef :: (TypeEnv -> CExpression a -> [Issue]) 
+              -> TypeEnv 
+              -> CFunctionDef a 
+              -> [Issue]
 analyzeFunDef f ctx (CFunDef _ _ _ stmt _) = analyzeStmt f ctx stmt
 
-analyzeStmt :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CStatement a -> [Issue]
-analyzeStmt f ctx stmt = case stmt of
-    CExpr (Just expr) _ -> f ctx expr
-    CCompound _ items _ -> 
-        let ctx' = buildContext items ctx
-        in concatMap (analyzeCompoundBlockItem f ctx') items
-    CIf _ thenStmt maybeElse _ -> 
-        analyzeStmt f ctx thenStmt ++ maybe [] (analyzeStmt f ctx) maybeElse
-    CWhile _ body _ _ -> analyzeStmt f ctx body
-    CFor _ _ _ body _ -> analyzeStmt f ctx body
-    _ -> []
+analyzeStmt :: (TypeEnv -> CExpression a -> [Issue]) 
+            -> TypeEnv 
+            -> CStatement a 
+            -> [Issue]
+analyzeStmt f env stmt = case stmt of
+    CExpr (Just expr) _    -> walkExpr f env expr
+    CCompound _ items _    ->
+        let (issues, _) = foldl (stepItem f) ([], env) items
+        in issues
+    CIf cond thenS elseS _ ->
+        walkExpr f env cond
+        ++ analyzeStmt f env thenS
+        ++ maybe [] (analyzeStmt f env) elseS
+    CWhile cond body _ _   -> walkExpr f env cond ++ analyzeStmt f env body
+    CFor _ _ _ body _      -> analyzeStmt f env body
+    CReturn (Just expr) _  -> walkExpr f env expr
+    _                      -> []
 
-analyzeCompoundBlockItem :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CCompoundBlockItem a -> [Issue]
-analyzeCompoundBlockItem f ctx (CBlockStmt stmt) = analyzeStmt f ctx stmt
-analyzeCompoundBlockItem f ctx (CBlockDecl decl) = analyzeDeclration f ctx decl
-analyzeCompoundBlockItem _ _ _ = []
+-- | Apply f to an expression and all of its sub-expressions recursively.
+walkExpr :: (TypeEnv -> CExpression a -> [Issue])
+         -> TypeEnv
+         -> CExpression a
+         -> [Issue]
+walkExpr f env expr = f env expr ++ concatMap (walkExpr f env) (childExprs expr)
 
-analyzeDeclration :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CDeclaration a -> [Issue]
-analyzeDeclration f ctx (CDecl _ declrs _) = concatMap (analyzeDeclr f ctx) declrs
+-- | Direct child expressions of a C expression node.
+childExprs :: CExpression a -> [CExpression a]
+childExprs expr = case expr of
+    CAssign _ l r _    -> [l, r]
+    CBinary _ l r _    -> [l, r]
+    CUnary  _ e _      -> [e]
+    CCast   _ e _      -> [e]
+    CCall fn args _    -> fn : args
+    CMember e _ _ _    -> [e]
+    CIndex  e1 e2 _    -> [e1, e2]
+    CCond c t e _      -> maybe [c, e] (\t' -> [c, t', e]) t
+    CComma  es _       -> es
+    _                  -> []
+
+stepItem :: (TypeEnv -> CExpression a -> [Issue])
+         -> ([Issue], TypeEnv)
+         -> CCompoundBlockItem a
+         -> ([Issue], TypeEnv)
+stepItem f (issues, env) item = case item of
+    CBlockDecl decl ->
+        let env'   = collectDecl decl env
+            newIss = analyzeDeclration f env decl
+        in (issues ++ newIss, env')
+    CBlockStmt stmt ->
+        (issues ++ analyzeStmt f env stmt, env)
+    _ -> (issues, env)
+
+analyzeDeclration :: (TypeEnv -> CExpression a -> [Issue]) 
+                  -> TypeEnv 
+                  -> CDeclaration a 
+                  -> [Issue]
+analyzeDeclration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) declrs
   where
-    analyzeDeclr f ctx (_, maybeInit, maybeExpr) = 
+    analyzeDeclr g ctx (_, maybeInit, maybeExpr) =
         case maybeExpr of
-            Just expr -> f ctx expr
-            Nothing -> 
+            Just expr -> g ctx expr
+            Nothing   ->
                 case maybeInit of
-                    Just init -> analyzeInit f ctx init
-                    Nothing -> []
+                    Just ini -> analyzeInit g ctx ini
+                    Nothing  -> []
 
-analyzeInit :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> CInitializer a -> [Issue]
-analyzeInit f ctx (CInitExpr expr _) = f ctx expr
-analyzeInit f ctx (CInitList initList _) = 
-    let items = initList
-    in concatMap (\(_, initializer) -> analyzeInit f ctx initializer) items
-analyzeInit _ _ _ = []
+analyzeInit :: (TypeEnv -> CExpression a -> [Issue]) 
+            -> TypeEnv 
+            -> CInitializer a 
+            -> [Issue]
+analyzeInit f env (CInitExpr expr _)     = walkExpr f env expr
+analyzeInit f env (CInitList initList _) =
+    concatMap (\(_, ini) -> analyzeInit f env ini) initList
+analyzeInit _ _ _                        = []
 
-analyzeInitItem :: (VarContext -> CExpression a -> [Issue]) -> VarContext -> (CPartDesignator a, CInitializer a) -> [Issue]
-analyzeInitItem f ctx (_, initializer) = analyzeInit f ctx initializer
-
-buildContext :: [CCompoundBlockItem a] -> VarContext -> VarContext
-buildContext items ctx = foldl addItem ctx items
-  where
-    addItem context (CBlockDecl (CDecl specs declrs _)) = 
-        foldl (addDeclr specs) context declrs
-    addItem context _ = context
-    
-    addDeclr specs context (Just (CDeclr (Just (Ident name _ _)) derived _ _ _), _, _) =
-        Map.insert name (checkPtr derived) context
-    addDeclr _ context _ = context
-    
-    checkPtr derived = any isPtrDerived derived
-    isPtrDerived (CPtrDeclr _ _) = True
-    isPtrDerived _ = False
