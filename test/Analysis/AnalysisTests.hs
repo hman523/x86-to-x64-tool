@@ -9,6 +9,6 @@ import Analysis.TypeSizeTests (typeSizeSpec)
 import Analysis.TypeCheckerTests (typecheckerSpec)
 
 analysisSpec :: Spec
-analysisSpec = do
+analysisSpec = describe "Analysis Tests" $ do
   typeSizeSpec
   typecheckerSpec

@@ -170,18 +170,15 @@ data Issue = Issue
     , issueSeverity :: Severity
     , issueType     :: IssueTag
     , catagory      :: Category
-    , code          :: Maybe String
     }
 
 instance Show Issue where
     show i = show (catagory i) ++ ": " ++ show (issueType i) 
         ++ " [" ++ map toUpper (show (issueSeverity i)) ++ "]" 
         ++ " at " ++ show (issuePos i)
-        ++ "\nCode: " ++ show (code i)
 
-createIssue :: CTranslUnit -> NodeInfo -> Severity -> IssueTag -> Issue
-createIssue _ pos sev tag = Issue pos sev tag (getCategory tag) Nothing
-
+createIssue :: NodeInfo -> Severity -> IssueTag -> Issue
+createIssue pos sev tag = Issue pos sev tag (getCategory tag)
 -- ---------------------------------------------------------------------------
 -- AST traversal helpers
 -- ---------------------------------------------------------------------------

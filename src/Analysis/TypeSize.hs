@@ -34,7 +34,7 @@ checkPointerToInt ast@(CTranslUnit decls _) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
             castFrom = resolveTypedef tenv (typeOfExpr env inner)
         in if isIntType' castTo && isPointer castFrom
-           then [createIssue undefined info Critical CastPointerToInt]
+           then [createIssue info Critical CastPointerToInt]
            else []
     checkCast _ _ _ = []
 
@@ -48,7 +48,7 @@ checkPointerToUInt ast@(CTranslUnit decls _) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
             castFrom = resolveTypedef tenv (typeOfExpr env inner)
         in if isUIntType castTo && isPointer castFrom
-           then [createIssue undefined info Critical CastPointerToUInt]
+           then [createIssue info Critical CastPointerToUInt]
            else []
     checkCast _ _ _ = []
 
@@ -62,7 +62,7 @@ checkIntToPointer ast@(CTranslUnit decls _) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
             castFrom = resolveTypedef tenv (typeOfExpr env inner)
         in if isPointer castTo && isIntType' castFrom
-           then [createIssue undefined info Critical CastIntToPointer]
+           then [createIssue info Critical CastIntToPointer]
            else []
     checkCast _ _ _ = []
 
@@ -76,7 +76,7 @@ checkLongToPointer ast@(CTranslUnit decls _) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
             castFrom = resolveTypedef tenv (typeOfExpr env inner)
         in if isPointer castTo && isLongType' castFrom
-           then [createIssue undefined info Critical CastLongToPointer]
+           then [createIssue info Critical CastLongToPointer]
            else []
     checkCast _ _ _ = []
 
@@ -86,7 +86,7 @@ checkLongToPointer ast@(CTranslUnit decls _) =
 
 -- | Check for sizeof(int) == sizeof(void*) comparisons  
 checkSizeOfInt :: CTranslUnit -> [Issue]
-checkSizeOfInt (CTranslUnit decls _) =
+checkSizeOfInt ast@(CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr :: TypeEnv -> CExpression NodeInfo -> [Issue]
@@ -95,15 +95,15 @@ checkSizeOfInt (CTranslUnit decls _) =
             | op `elem` [CEqOp, CNeqOp] ->
                 case (sizeofType left, sizeofType right) of
                     (Just TInt, Just (TPointer _)) ->
-                        [createIssue undefined info Critical SizeOfIntIsVoid]
+                        [createIssue info Critical SizeOfIntIsVoid]
                     (Just (TPointer _), Just TInt) ->
-                        [createIssue undefined info Critical SizeOfIntIsVoid]
+                        [createIssue info Critical SizeOfIntIsVoid]
                     _ -> []
         _ -> []
 
 -- | Check for sizeof(long) == sizeof(void*) comparisons
 checkSizeOfLong :: CTranslUnit -> [Issue]
-checkSizeOfLong (CTranslUnit decls _) =
+checkSizeOfLong ast@(CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr :: TypeEnv -> CExpression NodeInfo -> [Issue]
@@ -112,9 +112,9 @@ checkSizeOfLong (CTranslUnit decls _) =
             | op `elem` [CEqOp, CNeqOp] ->
                 case (sizeofType left, sizeofType right) of
                     (Just TLong, Just (TPointer _)) ->
-                        [createIssue undefined info Critical SizeOfLongIsVoid]
+                        [createIssue info Critical SizeOfLongIsVoid]
                     (Just (TPointer _), Just TLong) ->
-                        [createIssue undefined info Critical SizeOfLongIsVoid]
+                        [createIssue info Critical SizeOfLongIsVoid]
                     _ -> []
         _ -> []
 
@@ -141,7 +141,7 @@ checkIntAsSizet ast@(CTranslUnit decls _) =
             let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
                 rhsType = resolveTypedef tenv (typeOfExpr env rhs)
             in if isSizetType lhsType && isIntType' rhsType
-               then [createIssue undefined info Warning UsingIntAsSizet]
+               then [createIssue info Warning UsingIntAsSizet]
                else []
         _ -> []
 
@@ -161,7 +161,7 @@ checkIntAsPtrdifft ast@(CTranslUnit decls _) =
             let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
                 rhsType = resolveTypedef tenv (typeOfExpr env rhs)
             in if isPtrdifftType lhsType && isIntType' rhsType
-               then [createIssue undefined info Warning UsingIntAsPtrdifft]
+               then [createIssue info Warning UsingIntAsPtrdifft]
                else []
         _ -> []
 
@@ -178,7 +178,7 @@ checkUIntAsMemSize ast@(CTranslUnit decls _) =
     checkAlloc tenv env expr = case expr of
         CCall (CVar (Ident fname _ _) _) args info
             | fname `elem` ["malloc", "calloc", "realloc"] ->
-                [ createIssue undefined info Warning UsingUIntAsMemSize
+                [ createIssue info Warning UsingUIntAsMemSize
                 | arg <- args
                 , let t = resolveTypedef tenv (typeOfExpr env arg)
                 , isIntType' t || isUIntType t
