@@ -62,10 +62,20 @@ library
     exposed-modules:  
         X86_to_X64,
         Parser.Parser,
-        Analysis.TypeSize,
         Analysis.Analysis,
         Analysis.UtilTypes,
-        Analysis.TypeChecker
+        Analysis.TypeChecker,
+        Analysis.Alignment,
+        Analysis.BitManipulation,
+        Analysis.Comparison,
+        Analysis.ConstantsLiterals,
+        Analysis.FormatStrings,
+        Analysis.FunctionSignatures,
+        Analysis.MemoryAllocation,
+        Analysis.PlatformSpecifics,
+        Analysis.PointerMath,
+        Analysis.Serialization,
+        Analysis.TypeSize
 
 
     -- Modules included in this library but not exported.
