@@ -1,0 +1,47 @@
+module Analysis.BitManipulationTests where
+
+import Test.Hspec
+import Analysis.AnalysisTestUtils
+import Analysis.BitManipulation
+import Analysis.UtilTypes
+
+bitManipulationSpec :: Spec
+bitManipulationSpec = describe "BitManipulation Analysis" $ do
+
+    describe "checkPackingPtrsWithFlagsInInt" $ do
+        shouldFlagError
+            "flags cast to int of pointer OR'd with flags"
+            "void foo() { int *p; int flags; int packed = (int)(p | flags); }"
+            checkPackingPtrsWithFlagsInInt
+
+        shouldNotFlagError
+            "does not flag int | int cast to int"
+            "void foo() { int a; int b; int c = (int)(a | b); }"
+            checkPackingPtrsWithFlagsInInt
+
+    describe "checkBitShiftsOnPtr" $ do
+        shouldFlagError
+            "flags left-shift on pointer-typed variable"
+            "void foo() { int *p; int n; long x = p << n; }"
+            checkBitShiftsOnPtr
+
+        shouldFlagError
+            "flags right-shift on pointer-typed variable"
+            "void foo() { int *p; int n; long x = p >> n; }"
+            checkBitShiftsOnPtr
+
+        shouldNotFlagError
+            "does not flag shift on int variable"
+            "void foo() { int x = 1; int shift = x << 4; }"
+            checkBitShiftsOnPtr
+
+    describe "checkExtractingPtrBitsIn32BitVar" $ do
+        shouldFlagError
+            "flags cast to int of right-shifted pointer"
+            "void foo() { int *p; int bits = (int)(p >> 32); }"
+            checkExtractingPtrBitsIn32BitVar
+
+        shouldNotFlagError
+            "does not flag cast to int of right-shifted int"
+            "void foo() { long x; int bits = (int)(x >> 16); }"
+            checkExtractingPtrBitsIn32BitVar

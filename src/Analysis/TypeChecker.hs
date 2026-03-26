@@ -61,6 +61,8 @@ classifyTypeSpecs specs
     | hasFloat specs                         = TFloat
     | hasDouble specs                        = TDouble
     | hasTypedefName specs                   = TTypedef (getTypedefName specs)
+    | hasNamedStruct specs                   = TStruct (getSUName specs)
+    | hasNamedUnion specs                    = TUnion  (getSUName specs)
     | otherwise                              = TUnknown
   where
     hasVoid    ss = any (\s -> case s of CVoidType _ -> True; _ -> False) ss
@@ -73,6 +75,12 @@ classifyTypeSpecs specs
     hasDouble  ss = any (\s -> case s of CDoubleType _ -> True; _ -> False) ss
     hasTypedefName ss = any (\s -> case s of CTypeDef _ _ -> True; _ -> False) ss
     getTypedefName ss = head [n | CTypeDef (Ident n _ _) _ <- ss]
+    hasNamedStruct ss = any (\s -> case s of
+        CSUType (CStruct CStructTag (Just _) _ _ _) _ -> True; _ -> False) ss
+    hasNamedUnion ss = any (\s -> case s of
+        CSUType (CStruct CUnionTag (Just _) _ _ _) _ -> True; _ -> False) ss
+    getSUName ss = head
+        [ n | CSUType (CStruct _ (Just (Ident n _ _)) _ _ _) _ <- ss ]
 
 -- | Add all variables declared in a CDeclaration into the TypeEnv
 collectDecl :: CDeclaration a -> TypeEnv -> TypeEnv
@@ -167,6 +175,38 @@ buildTypedefEnv (CTranslUnit decls _) = foldr collectTypedef Map.empty decls
     insertTypedef baseSpecs (Just (CDeclr (Just (Ident name _ _)) derived _ _ _), _, _) acc =
         Map.insert name (resolveType baseSpecs derived) acc
     insertTypedef _ _ acc = acc
+
+-- ---------------------------------------------------------------------------
+-- Struct/union member environment
+-- ---------------------------------------------------------------------------
+
+-- | Maps struct or union tag names to their member (field name, field type) pairs.
+type StructEnv = Map.Map String [(String, CType)]
+
+-- | Build a StructEnv by scanning all top-level struct/union definitions.
+buildStructEnv :: CTranslUnit -> StructEnv
+buildStructEnv (CTranslUnit decls _) = foldr collectDecl' Map.empty decls
+  where
+    collectDecl' (CDeclExt (CDecl specs _ _)) acc =
+        foldr collectFromSpec acc [s | CTypeSpec s <- specs]
+    collectDecl' _ acc = acc
+
+    collectFromSpec (CSUType (CStruct _ (Just (Ident name _ _)) (Just members) _ _) _) acc =
+        Map.insert name (concatMap extractMembers members) acc
+    collectFromSpec _ acc = acc
+
+    extractMembers (CDecl specs declrs _) =
+        [ (n, resolveType specs derived)
+        | (Just (CDeclr (Just (Ident n _ _)) derived _ _ _), _, _) <- declrs ]
+
+-- | True if the named struct/union contains at least one pointer-typed member.
+structHasPointer :: StructEnv -> String -> Bool
+structHasPointer senv name =
+    case Map.lookup name senv of
+        Just members -> any (isPointer . snd) members
+        Nothing      -> False
+
+-- ---------------------------------------------------------------------------
 
 -- | Resolve TTypedef references through the typedef environment,
 --   following chains (e.g. typedef myuint bigint).

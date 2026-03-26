@@ -211,7 +211,18 @@ analyzeStmt f env stmt = case stmt of
         ++ analyzeStmt f env thenS
         ++ maybe [] (analyzeStmt f env) elseS
     CWhile cond body _ _   -> walkExpr f env cond ++ analyzeStmt f env body
-    CFor _ _ _ body _      -> analyzeStmt f env body
+    CFor init cond step body _ ->
+        let initIssues = case init of
+                Left (Just expr) -> walkExpr f env expr
+                Left Nothing     -> []
+                Right decl       -> analyzeDeclration f env decl
+            env'       = case init of
+                Right decl -> collectDecl decl env
+                _          -> env
+            condIssues = maybe [] (walkExpr f env') cond
+            stepIssues = maybe [] (walkExpr f env') step
+            bodyIssues = analyzeStmt f env' body
+        in initIssues ++ condIssues ++ stepIssues ++ bodyIssues
     CReturn (Just expr) _  -> walkExpr f env expr
     _                      -> []
 

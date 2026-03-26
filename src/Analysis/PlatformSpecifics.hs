@@ -1,7 +1,13 @@
 module Analysis.PlatformSpecifics where
 
 import Language.C.Syntax.AST
+import Language.C.Syntax.Constants (getCInteger, CString(..))
+import Language.C.Data.Node
+import Language.C.Data.Ident
+import Data.List (isPrefixOf, isInfixOf)
 import Analysis.UtilTypes
+import Analysis.TypeChecker
+import qualified Data.Map as Map
 
 analyzePlatformSpecificIssues :: CTranslUnit -> [Issue]
 analyzePlatformSpecificIssues ast =
@@ -11,22 +17,98 @@ analyzePlatformSpecificIssues ast =
     ++ checkx86SpecificCompilerIntrinsics ast
     ++ checkAssumptionsAboutRegSizes ast
 
--- inlineAsmWithx86Instructions
-checkInlineAsmWithx86Instructions :: CTranslUnit -> [Issue]
-checkInlineAsmWithx86Instructions ast = []
+-- ---------------------------------------------------------------------------
+-- Statement-level walker (needed for CAsm nodes)
+-- ---------------------------------------------------------------------------
 
--- asmBlocks
+-- | Apply @f@ to every statement in the translation unit (depth-first).
+walkAllStmts :: (CStatement NodeInfo -> [Issue]) -> CTranslUnit -> [Issue]
+walkAllStmts f (CTranslUnit decls _) = concatMap checkTop decls
+  where
+    checkTop (CFDefExt (CFunDef _ _ _ body _)) = walkStmt body
+    checkTop _                                  = []
+
+    walkStmt stmt = f stmt ++ case stmt of
+        CCompound _ items _ -> concatMap walkItem items
+        CIf _ t e _         -> walkStmt t ++ maybe [] walkStmt e
+        CWhile _ body _ _   -> walkStmt body
+        CFor _ _ _ body _   -> walkStmt body
+        CSwitch _ body _    -> walkStmt body
+        CLabel _ s _ _      -> walkStmt s
+        _                   -> []
+
+    walkItem (CBlockStmt s) = walkStmt s
+    walkItem _              = []
+
+-- ---------------------------------------------------------------------------
+-- Checks
+-- ---------------------------------------------------------------------------
+
+-- | Flag any inline assembly block.
 checkAsmBlocks :: CTranslUnit -> [Issue]
-checkAsmBlocks ast = []
+checkAsmBlocks ast = walkAllStmts checkStmt ast
+  where
+    checkStmt (CAsm _ info) = [createIssue info Critical AsmBlocks]
+    checkStmt _             = []
 
--- handleTypesCastToInt
+-- | Flag inline asm containing x86 register names (eax, ebx, ecx, edx, etc.).
+checkInlineAsmWithx86Instructions :: CTranslUnit -> [Issue]
+checkInlineAsmWithx86Instructions ast = walkAllStmts checkStmt ast
+  where
+    checkStmt (CAsm (CAsmStmt _ asmStr _ _ _ _) info) =
+        let str = getAsmStr asmStr
+        in [ createIssue info Critical InlineAsmWithx86Instructions
+           | any (`isInfixOf` str) x86Regs ]
+    checkStmt _ = []
+
+    getAsmStr (CStrLit (CString s _) _) = s
+
+    x86Regs :: [String]
+    x86Regs = [ "%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi", "%esp", "%ebp"
+              , "eax", "ebx", "ecx", "edx", "esi", "edi", "esp", "ebp" ]
+
+-- | Flag casts of Windows HANDLE-family typedefs to int.
 checkHandleTypesCastToInt :: CTranslUnit -> [Issue]
-checkHandleTypesCastToInt ast = []
+checkHandleTypesCastToInt ast@(CTranslUnit decls _) =
+    let tenv = buildTypedefEnv ast
+    in concatMap (analyzeDecl (checkCast tenv) Map.empty) decls
+  where
+    checkCast tenv _env (CCast castDecl inner info) =
+        let castTo    = resolveTypedef tenv (typeOfDecl castDecl)
+            innerType = typeOfExpr Map.empty inner
+        in case (isIntType' castTo, innerType) of
+            (True, TTypedef name) | name `elem` handleTypes ->
+                [createIssue info Warning HandleTypesCastToInt]
+            _ -> []
+    checkCast _ _ _ = []
 
--- x86SpecificCompilerIntrinsics
+    handleTypes :: [String]
+    handleTypes = ["HANDLE", "HMODULE", "HWND", "HINSTANCE"
+                  , "HKEY", "HDC", "HBITMAP", "SOCKET", "HANDLE_PTR"]
+
+-- | Flag calls to x86-specific SIMD / compiler intrinsics.
 checkx86SpecificCompilerIntrinsics :: CTranslUnit -> [Issue]
-checkx86SpecificCompilerIntrinsics ast = []
+checkx86SpecificCompilerIntrinsics ast@(CTranslUnit decls _) =
+    concatMap (analyzeDecl checkExpr Map.empty) decls
+  where
+    checkExpr _env (CVar (Ident name _ _) info) =
+        [ createIssue info Warning X86SpecificCompilerIntrinsics
+        | any (`isPrefixOf` name) intrinsicPrefixes ]
+    checkExpr _ _ = []
 
--- assumptionsAboutRegSizes
+    intrinsicPrefixes :: [String]
+    intrinsicPrefixes = ["_mm_", "_mm256_", "_mm512_", "__mm", "_m_", "__builtin_ia32"]
+
+-- | Flag comparisons of sizeof(T) with the literal 4 (assumes 32-bit register size).
 checkAssumptionsAboutRegSizes :: CTranslUnit -> [Issue]
-checkAssumptionsAboutRegSizes ast = []
+checkAssumptionsAboutRegSizes ast@(CTranslUnit decls _) =
+    concatMap (analyzeDecl checkExpr Map.empty) decls
+  where
+    checkExpr _env expr = case expr of
+        CBinary op (CSizeofType _ _) (CConst (CIntConst n _)) info
+            | op `elem` [CEqOp, CNeqOp] && getCInteger n == 4 ->
+                [createIssue info Warning AssumptionsAboutRegSizes]
+        CBinary op (CConst (CIntConst n _)) (CSizeofType _ _) info
+            | op `elem` [CEqOp, CNeqOp] && getCInteger n == 4 ->
+                [createIssue info Warning AssumptionsAboutRegSizes]
+        _ -> []

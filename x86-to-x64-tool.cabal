@@ -148,7 +148,17 @@ test-suite x86-to-x64-tool-test
         Parser.ParserTests,
         Analysis.AnalysisTests,
         Analysis.TypeSizeTests,
-        Analysis.TypeCheckerTests
+        Analysis.TypeCheckerTests,
+        Analysis.FunctionSignaturesTests,
+        Analysis.PointerMathTests,
+        Analysis.MemoryAllocationTests,
+        Analysis.PlatformSpecificsTests,
+        Analysis.BitManipulationTests,
+        Analysis.ComparisonTests,
+        Analysis.FormatStringsTests,
+        Analysis.ConstantsLiteralsTests,
+        Analysis.AlignmentTests,
+        Analysis.SerializationTests
     -- Test dependencies.
     build-depends:
         base ^>=4.18.3.0,
