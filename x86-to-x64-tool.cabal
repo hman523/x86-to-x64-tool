@@ -75,7 +75,19 @@ library
         Analysis.PlatformSpecifics,
         Analysis.PointerMath,
         Analysis.Serialization,
-        Analysis.TypeSize
+        Analysis.TypeSize,
+        Transformation.Transformation,
+        Transformation.Alignment,
+        Transformation.BitManipulation,
+        Transformation.Comparison,
+        Transformation.ConstantsLiterals,
+        Transformation.FormatStrings,
+        Transformation.FunctionSignatures,
+        Transformation.MemoryAllocation,
+        Transformation.PlatformSpecifics,
+        Transformation.PointerMath,
+        Transformation.Serialization,
+        Transformation.TypeSize
 
 
     -- Modules included in this library but not exported.
@@ -159,7 +171,21 @@ test-suite x86-to-x64-tool-test
         Analysis.ConstantsLiteralsTests,
         Analysis.AlignmentTests,
         Analysis.SerializationTests,
-        Analysis.IntegrationTests
+        Analysis.IntegrationTests,
+        Transformation.TransformationTests,
+        Transformation.TransformationTestsUtils,
+        Transformation.AlignmentTests,
+        Transformation.BitManipulationTests,
+        Transformation.ComparisonTests,
+        Transformation.ConstantsLiteralsTests,
+        Transformation.FormatStringsTests,
+        Transformation.FunctionSignaturesTests,
+        Transformation.MemoryAllocationTests,
+        Transformation.PlatformSpecificsTests,
+        Transformation.PointerMathTests,
+        Transformation.SerializationTests,
+        Transformation.TypeSizeTests
+
     -- Test dependencies.
     build-depends:
         base ^>=4.18.3.0,

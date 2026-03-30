@@ -1,0 +1,28 @@
+module Transformation.TransformationTests where
+
+import Test.Hspec
+import Transformation.AlignmentTests
+import Transformation.BitManipulationTests
+import Transformation.ComparisonTests
+import Transformation.ConstantsLiteralsTests
+import Transformation.FormatStringsTests
+import Transformation.FunctionSignaturesTests
+import Transformation.MemoryAllocationTests
+import Transformation.PlatformSpecificsTests
+import Transformation.PointerMathTests
+import Transformation.SerializationTests
+import Transformation.TypeSizeTests
+
+transformationSpec :: Spec
+transformationSpec = describe "Transformation Tests" $ do
+  alignmentTransformSpec
+  bitManipulationTransformSpec
+  comparisonTransformSpec
+  constantsLiteralsTransformSpec
+  formatStringsTransformSpec
+  functionSignaturesTransformSpec
+  memoryAllocationTransformSpec
+  platformSpecificsTransformSpec
+  pointerMathTransformSpec
+  serializationTransformSpec
+  typeSizeTransformSpec
