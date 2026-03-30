@@ -61,3 +61,22 @@ platformSpecificsSpec = describe "PlatformSpecifics Analysis" $ do
             "does not flag sizeof(int) == 8 comparison"
             "void foo() { if (sizeof(int) == 8) { } }"
             checkAssumptionsAboutRegSizes
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all four platform checks fire from one function"
+            "void foo() { __asm__(\"movl %eax, %ebx\"); if (sizeof(int) == 4) { } _mm_set1_ps(0); }"
+            analyzePlatformSpecificIssues
+            [AsmBlocks, InlineAsmWithx86Instructions, AssumptionsAboutRegSizes, X86SpecificCompilerIntrinsics]
+
+        shouldFlagNIssues
+            "two distinct asm blocks produce exactly two AsmBlocks issues"
+            "void foo() { __asm__(\"nop\"); __asm__(\"nop\"); }"
+            checkAsmBlocks
+            2
+
+        shouldFlagNIssues
+            "two x86 intrinsic calls produce exactly two X86SpecificCompilerIntrinsics issues"
+            "void foo() { _mm_set1_ps(0); _mm256_setzero_ps(); }"
+            checkx86SpecificCompilerIntrinsics
+            2

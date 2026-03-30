@@ -61,3 +61,22 @@ constantsLiteralsSpec = describe "ConstantsLiterals Analysis" $ do
             "does not flag literal assigned to signed int"
             "void foo() { int x; x = 64; }"
             checkConstantsUsedForSizeCalcs
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all four constants-and-literals checks fire in one function"
+            "void foo() { int *p; char *q = malloc(4); int *r = (int*)0xDEAD; long x = (long)(p & 0xFFFFFFFF); unsigned long sz; sz = 128; }"
+            analyzeConstantsLiteralsIssues
+            [MagicValuesUsed, HardCodedAddressValues, BitMaskingAssuming32bitPts, ConstantsUsedForSizeCalcs]
+
+        shouldFlagNIssues
+            "malloc(4) and malloc(8) each produce one MagicValuesUsed issue"
+            "void foo() { char *p = malloc(4); char *q = malloc(8); }"
+            checkMagicValuesUsed
+            2
+
+        shouldFlagNIssues
+            "two hardcoded address casts produce exactly two HardCodedAddressValues issues"
+            "void foo() { int *p = (int*)0x1000; int *q = (int*)0xDEAD; }"
+            checkHardCodedAddressValues
+            2

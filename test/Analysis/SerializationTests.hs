@@ -56,3 +56,22 @@ serializationSpec = describe "Serialization Analysis" $ do
             "does not flag send of plain buffer"
             "void foo() { char *buf; int sock; send(sock, buf, 100, 0); }"
             checkSendingPtrsOverNetwork
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all four serialization checks fire in one function"
+            "struct Rec { int *ptr; int val; }; void foo() { int **pp; FILE *f; fwrite(pp, sizeof(*pp), 1, f); struct Rec r; fwrite(&r, sizeof(r), 1, f); int sock; send(sock, pp, sizeof(*pp), 0); int fd = shm_open(\"/test\", 0, 0); }"
+            analyzeSerializationIssues
+            [WritingPtrDirectToFile, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork, PtrInSharedMemory]
+
+        shouldFlagNIssues
+            "shm_open and shmget each produce one PtrInSharedMemory issue"
+            "void foo() { int fd = shm_open(\"/test\", 0, 0); int id = shmget(0, 1024, 0); }"
+            checkPtrInSharedMemory
+            2
+
+        shouldFlagNIssues
+            "two fwrite calls of pointer-to-pointer buffers produce exactly two issues"
+            "void foo() { int **pp; int **qq; FILE *f; fwrite(pp, sizeof(*pp), 1, f); fwrite(qq, sizeof(*qq), 1, f); }"
+            checkWritingPtrDirectToFile
+            2

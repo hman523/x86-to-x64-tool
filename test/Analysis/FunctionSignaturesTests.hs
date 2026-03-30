@@ -56,3 +56,22 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "does not flag va_arg extracting a pointer type"
             "void foo(int n, ...) { __builtin_va_list ap; void *p = __builtin_va_arg(ap, void*); }"
             checkVaargUsingWrongTypesForPtrArgs
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all four function-signature checks fire in one translation unit"
+            "int a() { int *p; return p; } long b() { int *q; return q; } void c(int h) { int *r; h = r; } void d(int n, ...) { __builtin_va_list ap; int x = __builtin_va_arg(ap, int); }"
+            analyzeFunctionSignatureIssues
+            [FnsReturnPtrAsInt, FnsReturnPtrAsLong, FnsParamDeclaredAsIntTakesPtr, VaargUsingWrongTypesForPtrArgs]
+
+        shouldFlagNIssues
+            "two functions each returning pointer as int produces exactly two issues"
+            "int a() { int *p; return p; } int b() { int *q; return q; }"
+            analyzeFunctionSignatureIssues
+            2
+
+        shouldFlagNIssues
+            "two int params both assigned a pointer each produce one issue"
+            "void foo(int x, int y) { int *p; int *q; x = p; y = q; }"
+            analyzeFunctionSignatureIssues
+            2

@@ -67,3 +67,22 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "does not flag fwrite of plain int"
             "void foo() { int x = 42; FILE *f; fwrite(&x, sizeof(x), 1, f); }"
             checkStructContainingPtrWrittenToBinFile
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "four alignment checks fire from struct, union, sizeof, and malloc in one snippet"
+            "struct Foo { int *p; int x; }; union Bar { int *ptr; int val; }; void foo() { int sz; sz = sizeof(int *); void *m = malloc(32); }"
+            analyzeAlignmentIssues
+            [StructsWithMixedPtrNonPtrMembers, UnionsContainingPtrAndInts, SizeofStoredin32bits, HardCodedStructSizes]
+
+        shouldFlagNIssues
+            "two mixed-member struct definitions produce exactly two issues"
+            "struct A { int *p; int x; }; struct B { char *s; int n; };"
+            checkStructsWithMixedPtrNonPtrMembers
+            2
+
+        shouldFlagAtLeastNIssues
+            "struct definition, fwrite of struct with pointer, and sizeof-to-int together produce at least three issues"
+            "struct Node { int *next; int val; }; void foo() { struct Node n; FILE *f; fwrite(&n, sizeof(n), 1, f); int sz; sz = sizeof(int *); }"
+            analyzeAlignmentIssues
+            3

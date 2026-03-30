@@ -17,6 +17,7 @@ import Analysis.FormatStringsTests (formatStringsSpec)
 import Analysis.ConstantsLiteralsTests (constantsLiteralsSpec)
 import Analysis.AlignmentTests (alignmentSpec)
 import Analysis.SerializationTests (serializationSpec)
+import Analysis.IntegrationTests (integrationSpec)
 
 analysisSpec :: Spec
 analysisSpec = describe "Analysis Tests" $ do
@@ -32,3 +33,4 @@ analysisSpec = describe "Analysis Tests" $ do
   constantsLiteralsSpec
   alignmentSpec
   serializationSpec
+  integrationSpec

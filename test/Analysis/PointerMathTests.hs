@@ -61,3 +61,22 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
             "does not flag array indexing with integer literal"
             "void foo() { int arr[10]; int x = arr[0]; }"
             checkArrayIndexingIntInArrayOver2tothe31size
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all four pointer-math checks fire together in one function"
+            "void foo() { int *a; int *b; int diff; diff = a - b; int n; int *c = a + n; unsigned int m; int *d = a - m; int arr[10]; int i; int x = arr[i]; }"
+            analyzePointerMathIssues
+            [PtrDiffStoredAs32bit, PointerAddOverflow, PtrSubUnderflow, ArrayIndexingIntInArrayOver2tothe31size]
+
+        shouldFlagNIssues
+            "two pointer-diff-to-int assignments produce exactly two issues"
+            "void foo() { int *a; int *b; int *c; int d1; int d2; d1 = a - b; d2 = b - c; }"
+            checkPtrDiffStoredAs32bit
+            2
+
+        shouldFlagAtLeastNIssues
+            "combined unsafe pointer operations produce at least four distinct issues"
+            "void foo() { int *a; int *b; int diff; diff = a - b; int n; int *c = a + n; unsigned int m; int *d = a - m; int arr[10]; int idx; int x = arr[idx]; }"
+            analyzePointerMathIssues
+            4

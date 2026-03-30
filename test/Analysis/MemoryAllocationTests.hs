@@ -50,3 +50,22 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
             "does not flag plain int assignment without sizeof"
             "void foo() { int x; int y = 5; x = y; }"
             checkUsingIntToStoreAllocationSizes
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all three allocation checks fire in one function"
+            "void foo() { int n; int m; char *p = malloc(n * m); char *q = malloc(n + m); int sz; int *r; sz = sizeof(*r); }"
+            analyzeMemoryAllocationIssues
+            [AllocationSizeCalculationsMayOverflow, MallocWithoutOverflowChecking, UsingIntToStoreAllocationSizes]
+
+        shouldFlagNIssues
+            "two multiply-overflow malloc calls produce exactly two issues"
+            "void foo() { int n; int m; int p; int q; char *a = malloc(n * m); char *b = malloc(p * q); }"
+            checkAllocationSizeCalculationsMayOverflow
+            2
+
+        shouldFlagNIssues
+            "two sizeof-to-int assignments produce exactly two issues"
+            "void foo() { int sz1; int sz2; int *p; int *q; sz1 = sizeof(*p); sz2 = sizeof(*q); }"
+            checkUsingIntToStoreAllocationSizes
+            2

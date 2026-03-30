@@ -65,3 +65,22 @@ formatStringsSpec = describe "FormatStrings Analysis" $ do
             "void foo() { int *p; int *q; printf(\"%d %x\", p, q); }"
             analyzeFormatStringIssues
             2
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "four format specifier issues fire from a single printf call"
+            "void foo() { int *p; long n; printf(\"%d %x %u %ld\", p, p, p, n); }"
+            analyzeFormatStringIssues
+            [DUsedWithPtr, XUsedWithPtr, UUsedWithPtr, LdUsedWithLongAssuming64bits]
+
+        shouldFlagNIssues
+            "two printf calls each with one bad specifier produce two issues"
+            "void foo() { int *p; int *q; printf(\"%d\", p); printf(\"%x\", q); }"
+            analyzeFormatStringIssues
+            2
+
+        shouldFlagAllTags
+            "pointer arg and size_t arg both printed with percent-d fire two distinct tags"
+            "void foo() { int *p; unsigned long sz; printf(\"%d\", p); printf(\"%d\", sz); }"
+            analyzeFormatStringIssues
+            [DUsedWithPtr, DUsedWithSizet]

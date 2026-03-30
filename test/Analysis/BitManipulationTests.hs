@@ -45,3 +45,22 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
             "does not flag cast to int of right-shifted int"
             "void foo() { long x; int bits = (int)(x >> 16); }"
             checkExtractingPtrBitsIn32BitVar
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all three bit-manipulation checks fire in one function"
+            "void foo() { int *p; int flags; int packed = (int)(p | flags); int n; long shifted = p << n; int bits = (int)(p >> 32); }"
+            analyzeBitManipulationIssues
+            [PackingPtrsWithFlagsInInt, BitShiftsOnPtr, ExtractingPtrBitsIn32BitVar]
+
+        shouldFlagNIssues
+            "two pointer shifts (left and right) produce exactly two BitShiftsOnPtr issues"
+            "void foo() { int *p; int *q; int n; long x = p << n; long y = q >> 2; }"
+            checkBitShiftsOnPtr
+            2
+
+        shouldFlagNIssues
+            "two pointer-packing casts produce exactly two PackingPtrsWithFlagsInInt issues"
+            "void foo() { int *p; int *q; int flags; int a = (int)(p | flags); int b = (int)(q | flags); }"
+            checkPackingPtrsWithFlagsInInt
+            2

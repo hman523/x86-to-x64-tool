@@ -55,3 +55,22 @@ comparisonSpec = describe "Comparison Analysis" $ do
             "does not flag non-seek function calls"
             "void foo() { int x; printf(\"%d\", x); }"
             checkUsingIntForFileOffsets
+
+    describe "multiple issues" $ do
+        shouldFlagAllTags
+            "all three comparison checks fire together"
+            "void foo() { int *start; int *end; for (int i = 0; i < (end - start); i++) { } int *p; if (p < 4096) { } int offset; fseek(0, offset, 0); }"
+            analyzeComparisonIssues
+            [LoopCounterAsIntWhenIteratingOverPtrArrays, PtrComparisonWithIntConsts, UsingIntForFileOffsets]
+
+        shouldFlagNIssues
+            "two fseek calls with int offsets produce exactly two issues"
+            "void foo() { int off1; int off2; fseek(0, off1, 0); fseek(0, off2, 0); }"
+            checkUsingIntForFileOffsets
+            2
+
+        shouldFlagNIssues
+            "two pointer-vs-integer-constant comparisons produce exactly two issues"
+            "void foo() { int *p; int *q; if (p < 4096) { } if (q > 100) { } }"
+            checkPtrComparisonWithIntConsts
+            2
