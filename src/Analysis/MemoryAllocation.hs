@@ -9,7 +9,7 @@ import qualified Data.Map as Map
 
 analyzeMemoryAllocationIssues :: CTranslUnit -> [Issue]
 analyzeMemoryAllocationIssues ast =
-    checkAllocationSizeCalculationsMayOverflow ast
+    checkAllocationSizeCalcsMayOverflow ast
     ++ checkMallocWithoutOverflowChecking ast
     ++ checkUsingIntToStoreAllocationSizes ast
 
@@ -18,8 +18,8 @@ allocFns = ["malloc", "calloc", "realloc"]
 
 -- | Flag malloc/calloc/realloc where the size argument is a multiplication of
 --   two int-typed values (product may overflow before widening to size_t).
-checkAllocationSizeCalculationsMayOverflow :: CTranslUnit -> [Issue]
-checkAllocationSizeCalculationsMayOverflow ast@(CTranslUnit decls _) =
+checkAllocationSizeCalcsMayOverflow :: CTranslUnit -> [Issue]
+checkAllocationSizeCalcsMayOverflow ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
     in concatMap (analyzeDecl (checkAlloc tenv) Map.empty) decls
   where
@@ -31,7 +31,7 @@ checkAllocationSizeCalculationsMayOverflow ast@(CTranslUnit decls _) =
     checkSizeExpr tenv env callInfo (CBinary CMulOp l r _) =
         let lt = resolveTypedef tenv (typeOfExpr env l)
             rt = resolveTypedef tenv (typeOfExpr env r)
-        in [ createIssue callInfo Critical AllocationSizeCalculationsMayOverflow
+        in [ createIssue callInfo Critical AllocationSizeCalcsMayOverflow
            | isIntType' lt && isIntType' rt ]
     checkSizeExpr _ _ _ _ = []
 

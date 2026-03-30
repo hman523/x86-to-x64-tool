@@ -1,19 +1,25 @@
 module Analysis.IntegrationTests where
 
 import Test.Hspec
+import qualified Data.ByteString.Char8 as BS
+import Parser.Parser (parseSource)
 import Analysis.Analysis (analysis)
 import Analysis.AnalysisTestUtils
 import Analysis.UtilTypes
+import Data.List (nub, (\\))
 
 integrationSpec :: Spec
-integrationSpec = describe "Integration Tests" $ do
+integrationSpec = do
+  everythingAtOnce <- runIO $ BS.readFile "test/c_progs/everything_at_once.c"
+
+  describe "Integration Tests" $ do
 
     describe "legacy memory manager" $ do
         shouldFlagAllTags
             "pointer diff to int, multiply overflow malloc, add overflow malloc, sizeof to int, pointer cast all fire"
             "void foo() { int *a; int *b; int diff; diff = a - b; int n; int m; char *p = malloc(n * m); char *q = malloc(n + m); int sz; sz = sizeof(void*); int addr = (int)a; }"
             analysis
-            [PtrDiffStoredAs32bit, AllocationSizeCalculationsMayOverflow, MallocWithoutOverflowChecking, UsingIntToStoreAllocationSizes, CastPointerToInt]
+            [PtrDiffStoredAs32bit, AllocationSizeCalcsMayOverflow, MallocWithoutOverflowChecking, UsingIntToStoreAllocationSizes, CastPointerToInt]
 
         shouldFlagAtLeastNIssues
             "legacy memory manager snippet triggers at least five issues"
@@ -130,10 +136,67 @@ integrationSpec = describe "Integration Tests" $ do
             "mixed-member struct, ptr diff to int, multiply overflow malloc, fwrite of struct with ptr, send of struct with ptr, sizeof to int, and ptr vs literal all flagged"
             "struct Node { int *next; int val; }; void foo() { int *start; int *end; int diff; diff = end - start; int n; int m; char *buf = malloc(n * m); struct Node nd; FILE *f; fwrite(&nd, sizeof(nd), 1, f); int sock; send(sock, &nd, sizeof(nd), 0); int sz; sz = sizeof(int *); int *p; if (p < 100) { } }"
             analysis
-            [StructsWithMixedPtrNonPtrMembers, PtrDiffStoredAs32bit, AllocationSizeCalculationsMayOverflow, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork, SizeofStoredin32bits, PtrComparisonWithIntConsts]
+            [StructsWithMixedPtrNonPtrMembers, PtrDiffStoredAs32bit, AllocationSizeCalcsMayOverflow, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork, SizeofStoredin32bits, PtrComparisonWithIntConsts]
 
         shouldFlagAtLeastNIssues
             "struct serialization pipeline triggers at least seven issues"
             "struct Node { int *next; int val; }; void foo() { int *start; int *end; int diff; diff = end - start; int n; int m; char *buf = malloc(n * m); struct Node nd; FILE *f; fwrite(&nd, sizeof(nd), 1, f); int sock; send(sock, &nd, sizeof(nd), 0); int sz; sz = sizeof(int *); int *p; if (p < 100) { } }"
             analysis
             7
+
+    -- One representative issue from every distinct IssueTag category,
+    -- sourced from the canonical test file on disk.
+    describe "everything at once" $ do
+        let expectedTags =
+              [ StructsWithMixedPtrNonPtrMembers
+              , UnionsContainingPtrAndInts
+              , StructContainingPtrWrittenToBinFile
+              , SizeofStoredin32bits
+              , HardCodedStructSizes
+              , PackingPtrsWithFlagsInInt
+              , BitShiftsOnPtr
+              , ExtractingPtrBitsIn32BitVar
+              , LoopCounterAsIntWhenIteratingOverPtrArrays
+              , PtrComparisonWithIntConsts
+              , UsingIntForFileOffsets
+              , MagicValuesUsed
+              , HardCodedAddressValues
+              , BitMaskingAssuming32bitPts
+              , ConstantsUsedForSizeCalcs
+              , DUsedWithPtr
+              , LdUsedWithLongAssuming64bits
+              , FnsReturnPtrAsInt
+              , FnsParamDeclaredAsIntTakesPtr
+              , AllocationSizeCalcsMayOverflow
+              , MallocWithoutOverflowChecking
+              , UsingIntToStoreAllocationSizes
+              , AsmBlocks
+              , InlineAsmWithx86Instructions
+              , AssumptionsAboutRegSizes
+              , X86SpecificCompilerIntrinsics
+              , PtrDiffStoredAs32bit
+              , PointerAddOverflow
+              , PtrSubUnderflow
+              , ArrayIndexingIntInArrayOver2tothe31size
+              , WritingPtrDirectToFile
+              , WritingPtrContrainingStructsToFiles
+              , SendingPtrsOverNetwork
+              , PtrInSharedMemory
+              , CastPointerToInt
+              , CastLongToPointer
+              , SizeOfIntIsVoid
+              , UsingUIntAsMemSize
+              ]
+
+        it "one issue from every category fires from a single large problematic translation unit" $ do
+            case parseSource everythingAtOnce of
+              Left err  -> fail $ show err
+              Right ast -> do
+                let foundTags = map issueType (analysis ast)
+                let missing   = nub expectedTags \\ nub foundTags
+                missing `shouldBe` []
+
+        it "everything-at-once file triggers at least 38 distinct issues" $ do
+            case parseSource everythingAtOnce of
+              Left err  -> fail $ show err
+              Right ast -> length (analysis ast) `shouldSatisfy` (>= 38)

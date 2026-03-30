@@ -8,21 +8,21 @@ import Analysis.UtilTypes
 memoryAllocationSpec :: Spec
 memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
 
-    describe "checkAllocationSizeCalculationsMayOverflow" $ do
+    describe "checkAllocationSizeCalcsMayOverflow" $ do
         shouldFlagError
             "flags malloc with int*int size calculation"
             "void foo() { int n; int m; char *p = malloc(n * m); }"
-            checkAllocationSizeCalculationsMayOverflow
+            checkAllocationSizeCalcsMayOverflow
 
         shouldNotFlagError
             "does not flag malloc with int*long size calculation"
             "void foo() { int n; long m; char *p = malloc(n * m); }"
-            checkAllocationSizeCalculationsMayOverflow
+            checkAllocationSizeCalcsMayOverflow
 
         shouldNotFlagError
             "does not flag simple malloc with sizeof"
             "void foo() { char *p = malloc(sizeof(int)); }"
-            checkAllocationSizeCalculationsMayOverflow
+            checkAllocationSizeCalcsMayOverflow
 
     describe "checkMallocWithoutOverflowChecking" $ do
         shouldFlagError
@@ -56,12 +56,12 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
             "all three allocation checks fire in one function"
             "void foo() { int n; int m; char *p = malloc(n * m); char *q = malloc(n + m); int sz; int *r; sz = sizeof(*r); }"
             analyzeMemoryAllocationIssues
-            [AllocationSizeCalculationsMayOverflow, MallocWithoutOverflowChecking, UsingIntToStoreAllocationSizes]
+            [AllocationSizeCalcsMayOverflow, MallocWithoutOverflowChecking, UsingIntToStoreAllocationSizes]
 
         shouldFlagNIssues
             "two multiply-overflow malloc calls produce exactly two issues"
             "void foo() { int n; int m; int p; int q; char *a = malloc(n * m); char *b = malloc(p * q); }"
-            checkAllocationSizeCalculationsMayOverflow
+            checkAllocationSizeCalcsMayOverflow
             2
 
         shouldFlagNIssues
