@@ -259,7 +259,8 @@ prettyPrintIssues verbose useColor termWidth issues =
                              (padRight sevWidth ("[" ++ map toUpper (show sev) ++ "]"))
                 loc    = ansi useColor "1;36"
                              (padRight locWidth (fmtLoc x))
-                tagStr = ansi useColor (catCode cat) (show (issueType x))
+                tagStr = "\n" ++ replicate (numWidth + 2) ' ' 
+                         ++ ansi useColor (catCode cat) (show (issueType x))
                 catStr = ansi useColor (catCode cat) ("(" ++ show cat ++ ")")
                 explanation
                     | verbose   = "\n" ++ replicate (numWidth + 2) ' '

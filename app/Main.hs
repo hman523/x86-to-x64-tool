@@ -5,9 +5,7 @@ import System.Exit        (exitFailure)
 import System.IO          (hPutStrLn, hIsTerminalDevice, stderr, stdout)
 import Text.Read          (readMaybe)
 
-import Parser.Parser      (parseSourceFile)
-import Analysis.Analysis  (analysis)
-import Analysis.UtilTypes (Issue(..), prettyPrintIssues)
+import X86_to_X64         (analyzeFile, transformFile, prettyPrintIssues)
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -59,8 +57,8 @@ usageMessage = unlines
     , ""
     , "Options:"
     , "  -v           Verbose: print a one-sentence explanation for each issue"
-    , "  -t           Transform: apply automated x86-to-x64 transformations (not yet implemented)"
-    , "  -o <file>    Output file for transformed source (used with -t)"
+    , "  -t           Transform: apply automated x86-to-x64 transformations"
+    , "  -o <file>    Write transformed source to this file (default: <input>.x64.c)"
     , "  --no-color   Disable colored output"
     , "  -h, --help   Show this help message"
     ]
@@ -93,24 +91,28 @@ getTermWidth = do
 
 run :: Config -> IO ()
 run cfg = do
-    result <- parseSourceFile (cfgInputFile cfg)
-    case result of
-        Left err  -> hPutStrLn stderr ("Parse error: " ++ show err) >> exitFailure
-        Right ast -> do
-            let issues = analysis ast
-            isTTY <- hIsTerminalDevice stdout
-            termWidth <- getTermWidth
-            let useColor = isTTY && not (cfgNoColor cfg)
-            if null issues
-                then putStrLn "No issues found."
-                else putStr (prettyPrintIssues (cfgVerbose cfg) useColor termWidth issues)
-            -- if cfgTransform cfg
-            --     then do
-            --         let outPath = case cfgOutputFile cfg of
-            --                           Just p  -> p
-            --                           Nothing -> cfgInputFile cfg ++ ".x64.c"
-            --         -- let transformed = transform ast issues
-            --         -- writeFile outPath transformed
-            --         -- putStrLn ("Transformed output written to: " ++ outPath)
-            --         putStrLn "Transform feature not yet implemented."
-            --     else return ()
+    isTTY     <- hIsTerminalDevice stdout
+    termWidth <- getTermWidth
+    let useColor = isTTY && not (cfgNoColor cfg)
+    if cfgTransform cfg
+        then do
+            result <- transformFile (cfgInputFile cfg)
+            case result of
+                Left err -> hPutStrLn stderr ("Parse error: " ++ err) >> exitFailure
+                Right (src, unresolved) -> do
+                    let outPath = case cfgOutputFile cfg of
+                                      Just p  -> p
+                                      Nothing -> cfgInputFile cfg ++ ".x64.c"
+                    writeFile outPath src
+                    putStrLn ("Transformed output written to: " ++ outPath)
+                    if null unresolved
+                        then putStrLn "All issues resolved."
+                        else do
+                            putStrLn (show (length unresolved) ++ " issue(s) could not be automatically resolved:")
+                            putStr (prettyPrintIssues (cfgVerbose cfg) useColor termWidth unresolved)
+        else do
+            result <- analyzeFile (cfgInputFile cfg)
+            case result of
+                Left err     -> hPutStrLn stderr ("Parse error: " ++ err) >> exitFailure
+                Right []     -> putStrLn "No issues found."
+                Right issues -> putStr (prettyPrintIssues (cfgVerbose cfg) useColor termWidth issues)
