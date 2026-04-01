@@ -130,8 +130,11 @@ checkSizeofStoredIn32bits ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkAssign tenv) Map.empty) decls
   where
     checkAssign tenv env (CAssign CAssignOp lhs rhs info) =
-        let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
-        in [ createIssue info Warning SizeofStoredin32bits
+        let lhsType  = resolveTypedef tenv (typeOfExpr env lhs)
+            mDeclPos = case lhs of
+                CVar (Ident name _ _) _ -> lookupDeclPos env name
+                _                       -> Nothing
+        in [ createIssueWithDecl info mDeclPos Warning SizeofStoredin32bits
            | isIntType' lhsType && isSizeof rhs ]
     checkAssign _ _ _ = []
 

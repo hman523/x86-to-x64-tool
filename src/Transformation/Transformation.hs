@@ -18,10 +18,7 @@ import qualified Transformation.TypeSize           as Typ
 --   Returns the transformed AST and any issues that could not be
 --   automatically resolved (because the correct fix depends on intent).
 transformation :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-transformation ast issues = transformAST ast issues
-
-transformAST :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-transformAST ast issues =
+transformation ast issues =
     foldr applyModule (ast, []) modules
   where
     -- Each entry: (category predicate, sub-module transformer)

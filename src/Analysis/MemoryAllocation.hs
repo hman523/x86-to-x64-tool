@@ -62,8 +62,11 @@ checkUsingIntToStoreAllocationSizes ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkAssign tenv) Map.empty) decls
   where
     checkAssign tenv env (CAssign CAssignOp lhs rhs info) =
-        let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
-        in [ createIssue info Warning UsingIntToStoreAllocationSizes
+        let lhsType  = resolveTypedef tenv (typeOfExpr env lhs)
+            mDeclPos = case lhs of
+                CVar (Ident name _ _) _ -> lookupDeclPos env name
+                _                       -> Nothing
+        in [ createIssueWithDecl info mDeclPos Warning UsingIntToStoreAllocationSizes
            | isIntType' lhsType && hasSizeof rhs ]
     checkAssign _ _ _ = []
 

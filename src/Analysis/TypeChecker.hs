@@ -24,8 +24,8 @@ data CType
     | TUnknown           -- fallback
     deriving (Show, Eq)
 
--- | Maps variable names to their resolved CType
-type TypeEnv = Map.Map String CType
+-- | Maps variable names to their resolved CType and declaration position
+type TypeEnv = Map.Map String (CType, Maybe NodeInfo)
 
 -- | Maps typedef names to their resolved CType
 type TypedefEnv = Map.Map String CType
@@ -82,17 +82,18 @@ classifyTypeSpecs specs
     getSUName ss = head
         [ n | CSUType (CStruct _ (Just (Ident n _ _)) _ _ _) _ <- ss ]
 
--- | Add all variables declared in a CDeclaration into the TypeEnv
-collectDecl :: CDeclaration a -> TypeEnv -> TypeEnv
+-- | Add all variables declared in a CDeclaration into the TypeEnv,
+--   recording each declarator's source position.
+collectDecl :: CDeclaration NodeInfo -> TypeEnv -> TypeEnv
 collectDecl (CDecl specs declrs _) env =
     foldr (addDeclr specs) env declrs
   where
-    addDeclr s (Just (CDeclr (Just (Ident name _ _)) derived _ _ _), _, _) acc =
-        Map.insert name (resolveType s derived) acc
+    addDeclr s (Just (CDeclr (Just (Ident name _ _)) derived _ _ ni), _, _) acc =
+        Map.insert name (resolveType s derived, Just ni) acc
     addDeclr _ _ acc = acc
 
 -- | Build a TypeEnv by walking all compound block items (handles ordering)
-buildTypeEnv :: [CCompoundBlockItem a] -> TypeEnv -> TypeEnv
+buildTypeEnv :: [CCompoundBlockItem NodeInfo] -> TypeEnv -> TypeEnv
 buildTypeEnv items env = foldl step env items
   where
     step acc (CBlockDecl decl) = collectDecl decl acc
@@ -100,7 +101,11 @@ buildTypeEnv items env = foldl step env items
 
 -- | Look up the type of a variable by name
 lookupType :: TypeEnv -> String -> CType
-lookupType env name = Map.findWithDefault TUnknown name env
+lookupType env name = maybe TUnknown fst (Map.lookup name env)
+
+-- | Look up the declaration position of a variable by name
+lookupDeclPos :: TypeEnv -> String -> Maybe NodeInfo
+lookupDeclPos env name = Map.lookup name env >>= snd
 
 -- | Resolve the type of an expression given the current TypeEnv
 typeOfExpr :: TypeEnv -> CExpression a -> CType

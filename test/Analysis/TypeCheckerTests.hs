@@ -177,18 +177,18 @@ testCollectDecl =
 
         it "adds a single variable to an empty env" $
             let env = envFromDecls "int x;"
-            in Map.lookup "x" env `shouldBe` Just TInt
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
 
         it "adds multiple variables from one declaration" $
             let env = envFromDecls "int x, y, z;"
             in do
-                Map.lookup "x" env `shouldBe` Just TInt
-                Map.lookup "y" env `shouldBe` Just TInt
-                Map.lookup "z" env `shouldBe` Just TInt
+                fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
+                fmap fst (Map.lookup "y" env) `shouldBe` Just TInt
+                fmap fst (Map.lookup "z" env) `shouldBe` Just TInt
 
         it "adds a pointer variable" $
             let env = envFromDecls "int *ptr;"
-            in Map.lookup "ptr" env `shouldBe` Just (TPointer TInt)
+            in fmap fst (Map.lookup "ptr" env) `shouldBe` Just (TPointer TInt)
 
         it "does not add anonymous declarators" $
             let env = envFromDecls "struct { int a; };"
@@ -197,9 +197,9 @@ testCollectDecl =
         it "handles multiple declarations" $
             let env = envFromDecls "int x; long y; char *s;"
             in do
-                Map.lookup "x" env `shouldBe` Just TInt
-                Map.lookup "y" env `shouldBe` Just TLong
-                Map.lookup "s" env `shouldBe` Just (TPointer TChar)
+                fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
+                fmap fst (Map.lookup "y" env) `shouldBe` Just TLong
+                fmap fst (Map.lookup "s" env) `shouldBe` Just (TPointer TChar)
 
 -- ---------------------------------------------------------------------------
 -- buildTypeEnv
@@ -213,19 +213,19 @@ testBuildTypeEnv =
             let env = envFromFunctionBody
                         "void f() { int x; long y; int *ptr; }"
             in do
-                Map.lookup "x"   env `shouldBe` Just TInt
-                Map.lookup "y"   env `shouldBe` Just TLong
-                Map.lookup "ptr" env `shouldBe` Just (TPointer TInt)
+                fmap fst (Map.lookup "x"   env) `shouldBe` Just TInt
+                fmap fst (Map.lookup "y"   env) `shouldBe` Just TLong
+                fmap fst (Map.lookup "ptr" env) `shouldBe` Just (TPointer TInt)
 
         it "later declarations shadow earlier ones with same name" $
             let env = envFromFunctionBody
                         "void f() { int x; long x; }"
-            in Map.lookup "x" env `shouldBe` Just TLong
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TLong
 
         it "ignores non-declaration block items" $
             let env = envFromFunctionBody
                         "void f() { int x; x = 5; }"
-            in Map.lookup "x" env `shouldBe` Just TInt
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
 
         it "returns empty env for empty function body" $
             let env = envFromFunctionBody "void f() {}"
@@ -240,42 +240,42 @@ testTypeOfExpr =
     describe "typeOfExpr" $ do
 
         it "resolves CVar to its declared type" $
-            let env  = Map.fromList [("x", TInt)]
+            let env  = Map.fromList [("x", (TInt, Nothing))]
                 expr = parseExprFrom "void f() { int x; x; }"
             in case expr of
                 Just e  -> typeOfExpr env e `shouldBe` TInt
                 Nothing -> pendingWith "could not extract expr"
 
         it "resolves address-of (&x) to TPointer of x's type" $
-            let env  = Map.fromList [("x", TInt)]
+            let env  = Map.fromList [("x", (TInt, Nothing))]
                 expr = parseExprFrom "void f() { int x; &x; }"
             in case expr of
                 Just e  -> typeOfExpr env e `shouldBe` TPointer TInt
                 Nothing -> pendingWith "could not extract expr"
 
         it "resolves dereference (*ptr) to pointed-to type" $
-            let env  = Map.fromList [("ptr", TPointer TInt)]
+            let env  = Map.fromList [("ptr", (TPointer TInt, Nothing))]
                 expr = parseExprFrom "void f() { int *ptr; *ptr; }"
             in case expr of
                 Just e  -> typeOfExpr env e `shouldBe` TInt
                 Nothing -> pendingWith "could not extract expr"
 
         it "resolves dereference of non-pointer to TUnknown" $
-            let env  = Map.fromList [("x", TInt)]
+            let env  = Map.fromList [("x", (TInt, Nothing))]
                 expr = parseExprFrom "void f() { int x; *x; }"
             in case expr of
                 Just e  -> typeOfExpr env e `shouldBe` TUnknown
                 Nothing -> pendingWith "could not extract expr"
 
         it "resolves pointer subtraction to TLong" $
-            let env  = Map.fromList [("p", TPointer TInt), ("q", TPointer TInt)]
+            let env  = Map.fromList [("p", (TPointer TInt, Nothing)), ("q", (TPointer TInt, Nothing))]
                 expr = parseExprFrom "void f() { int *p, *q; p - q; }"
             in case expr of
                 Just e  -> typeOfExpr env e `shouldBe` TLong
                 Nothing -> pendingWith "could not extract expr"
 
         it "returns TUnknown for unknown variable" $
-            lookupType Map.empty "nothere" `shouldBe` TUnknown
+            lookupType (Map.empty :: TypeEnv) "nothere" `shouldBe` TUnknown
 
 -- ---------------------------------------------------------------------------
 -- typeOfDecl

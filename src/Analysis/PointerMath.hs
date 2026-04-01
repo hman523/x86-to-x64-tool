@@ -21,12 +21,15 @@ checkPtrDiffStoredAs32bit ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkExpr tenv) Map.empty) decls
   where
     checkExpr tenv env (CAssign CAssignOp lhs rhs info) =
-        let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
+        let lhsType  = resolveTypedef tenv (typeOfExpr env lhs)
+            mDeclPos = case lhs of
+                CVar (Ident name _ _) _ -> lookupDeclPos env name
+                _                       -> Nothing
         in case rhs of
             CBinary CSubOp l r _ ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                     rt = resolveTypedef tenv (typeOfExpr env r)
-                in [ createIssue info Critical PtrDiffStoredAs32bit
+                in [ createIssueWithDecl info mDeclPos Critical PtrDiffStoredAs32bit
                    | isIntType' lhsType && isPointer lt && isPointer rt ]
             _ -> []
     checkExpr _ _ _ = []

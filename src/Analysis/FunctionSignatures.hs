@@ -105,10 +105,10 @@ checkFnsParamDeclaredAsIntTakesPtr ast@(CTranslUnit decls _) =
         case lhs of
             CVar (Ident name _ _) _ ->
                 case Map.lookup name paramEnv of
-                    Just declaredType
+                    Just (declaredType, mDeclPos)
                         | isIntType' (resolveTypedef tenv declaredType) ->
                             let rhsType = resolveTypedef tenv (typeOfExpr env rhs)
-                            in [ createIssue info Critical FnsParamDeclaredAsIntTakesPtr
+                            in [ createIssueWithDecl info mDeclPos Critical FnsParamDeclaredAsIntTakesPtr
                                | isPointer rhsType ]
                     _ -> []
             _ -> []

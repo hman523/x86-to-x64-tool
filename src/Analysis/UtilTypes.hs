@@ -6,7 +6,7 @@ import Language.C.Data.Ident
 import Data.Char (toUpper)
 import Language.C.Data.Position (posOf, posFile, posRow)
 import qualified Data.Map as Map
-import Analysis.TypeChecker (TypeEnv, CType(..), collectDecl, resolveType)
+import Analysis.TypeChecker (TypeEnv, CType(..), collectDecl, lookupDeclPos, resolveType)
 
 data Severity = Critical | Warning | Low deriving (Show, Eq)
 
@@ -182,6 +182,7 @@ getCategory tag = case tag of
 
 data Issue = Issue
     { issuePos      :: NodeInfo
+    , issueDeclPos  :: Maybe NodeInfo
     , issueSeverity :: Severity
     , issueType     :: IssueTag
     , catagory      :: Category
@@ -264,13 +265,23 @@ prettyPrintIssues verbose useColor termWidth issues =
                     | verbose   = "\n" ++ replicate (numWidth + 2) ' '
                                   ++ "-> "
                                   ++ wrapText availW explanIndent (describeIssue (issueType x))
+                                  ++ declNote x
                                   ++ "\n"
                     | otherwise = ""
+                declNote issue = case issueDeclPos issue of
+                    Nothing -> ""
+                    Just ni -> "\n" ++ replicate explanIndent ' '
+                               ++ ansi useColor "1;36"
+                                   ("Declared at " ++ posFile (posOf ni)
+                                    ++ ":" ++ show (posRow (posOf ni)) ++ ".")
             in num ++ sevStr ++ " " ++ loc ++ " " ++ tagStr ++ " " ++ catStr ++ explanation
     in unlines $ map fmt (zip [1..] issues)
 
 createIssue :: NodeInfo -> Severity -> IssueTag -> Issue
-createIssue pos sev tag = Issue pos sev tag (getCategory tag)
+createIssue pos sev tag = Issue pos Nothing sev tag (getCategory tag)
+
+createIssueWithDecl :: NodeInfo -> Maybe NodeInfo -> Severity -> IssueTag -> Issue
+createIssueWithDecl pos mDeclPos sev tag = Issue pos mDeclPos sev tag (getCategory tag)
 
 -- | One-sentence explanation of why each issue matters for x86-to-x64 migration.
 describeIssue :: IssueTag -> String
@@ -347,23 +358,23 @@ describeIssue tag = case tag of
 -- AST traversal helpers
 -- ---------------------------------------------------------------------------
 
-analyzeDecl :: (TypeEnv -> CExpression a -> [Issue]) 
-            -> TypeEnv 
-            -> CExternalDeclaration a 
+analyzeDecl :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+            -> TypeEnv
+            -> CExternalDeclaration NodeInfo
             -> [Issue]
 analyzeDecl f ctx (CFDefExt funDef) = analyzeFunDef f ctx funDef
 analyzeDecl _ _ (CDeclExt _)        = []
 analyzeDecl _ _ _                   = []
 
-analyzeFunDef :: (TypeEnv -> CExpression a -> [Issue]) 
-              -> TypeEnv 
-              -> CFunctionDef a 
+analyzeFunDef :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+              -> TypeEnv
+              -> CFunctionDef NodeInfo
               -> [Issue]
 analyzeFunDef f ctx (CFunDef _ _ _ stmt _) = analyzeStmt f ctx stmt
 
-analyzeStmt :: (TypeEnv -> CExpression a -> [Issue]) 
-            -> TypeEnv 
-            -> CStatement a 
+analyzeStmt :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+            -> TypeEnv
+            -> CStatement NodeInfo
             -> [Issue]
 analyzeStmt f env stmt = case stmt of
     CExpr (Just expr) _    -> walkExpr f env expr
@@ -391,14 +402,14 @@ analyzeStmt f env stmt = case stmt of
     _                      -> []
 
 -- | Apply f to an expression and all of its sub-expressions recursively.
-walkExpr :: (TypeEnv -> CExpression a -> [Issue])
+walkExpr :: (TypeEnv -> CExpression NodeInfo -> [Issue])
          -> TypeEnv
-         -> CExpression a
+         -> CExpression NodeInfo
          -> [Issue]
 walkExpr f env expr = f env expr ++ concatMap (walkExpr f env) (childExprs expr)
 
 -- | Direct child expressions of a C expression node.
-childExprs :: CExpression a -> [CExpression a]
+childExprs :: CExpression NodeInfo -> [CExpression NodeInfo]
 childExprs expr = case expr of
     CAssign _ l r _    -> [l, r]
     CBinary _ l r _    -> [l, r]
@@ -411,9 +422,9 @@ childExprs expr = case expr of
     CComma  es _       -> es
     _                  -> []
 
-stepItem :: (TypeEnv -> CExpression a -> [Issue])
+stepItem :: (TypeEnv -> CExpression NodeInfo -> [Issue])
          -> ([Issue], TypeEnv)
-         -> CCompoundBlockItem a
+         -> CCompoundBlockItem NodeInfo
          -> ([Issue], TypeEnv)
 stepItem f (issues, env) item = case item of
     CBlockDecl decl ->
@@ -424,9 +435,9 @@ stepItem f (issues, env) item = case item of
         (issues ++ analyzeStmt f env stmt, env)
     _ -> (issues, env)
 
-analyzeDeclration :: (TypeEnv -> CExpression a -> [Issue]) 
-                  -> TypeEnv 
-                  -> CDeclaration a 
+analyzeDeclration :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+                  -> TypeEnv
+                  -> CDeclaration NodeInfo
                   -> [Issue]
 analyzeDeclration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) declrs
   where
@@ -438,9 +449,9 @@ analyzeDeclration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) decl
                     Just ini -> analyzeInit g ctx ini
                     Nothing  -> []
 
-analyzeInit :: (TypeEnv -> CExpression a -> [Issue]) 
-            -> TypeEnv 
-            -> CInitializer a 
+analyzeInit :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+            -> TypeEnv
+            -> CInitializer NodeInfo
             -> [Issue]
 analyzeInit f env (CInitExpr expr _)     = walkExpr f env expr
 analyzeInit f env (CInitList initList _) =

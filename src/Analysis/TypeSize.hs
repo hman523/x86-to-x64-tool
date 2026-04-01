@@ -140,8 +140,11 @@ checkIntAsSizet ast@(CTranslUnit decls _) =
         CAssign CAssignOp lhs rhs info ->
             let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
                 rhsType = resolveTypedef tenv (typeOfExpr env rhs)
+                mDeclPos = case lhs of
+                    CVar (Ident name _ _) _ -> lookupDeclPos env name
+                    _                       -> Nothing
             in if isSizetType lhsType && isIntType' rhsType
-               then [createIssue info Warning UsingIntAsSizet]
+               then [createIssueWithDecl info mDeclPos Warning UsingIntAsSizet]
                else []
         _ -> []
 
@@ -160,8 +163,11 @@ checkIntAsPtrdifft ast@(CTranslUnit decls _) =
         CAssign CAssignOp lhs rhs info ->
             let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
                 rhsType = resolveTypedef tenv (typeOfExpr env rhs)
+                mDeclPos = case lhs of
+                    CVar (Ident name _ _) _ -> lookupDeclPos env name
+                    _                       -> Nothing
             in if isPtrdifftType lhsType && isIntType' rhsType
-               then [createIssue info Warning UsingIntAsPtrdifft]
+               then [createIssueWithDecl info mDeclPos Warning UsingIntAsPtrdifft]
                else []
         _ -> []
 
