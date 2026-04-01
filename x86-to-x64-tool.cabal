@@ -101,7 +101,8 @@ library
         base ^>=4.18.3.0,
         language-c,
         bytestring,
-        containers
+        containers,
+        syb
 
 
     -- Directories containing source files.
@@ -196,4 +197,5 @@ test-suite x86-to-x64-tool-test
         hspec,
         hspec-contrib,
         syb,
-        containers
+        containers,
+        pretty
