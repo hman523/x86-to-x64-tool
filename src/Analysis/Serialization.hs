@@ -1,7 +1,6 @@
 module Analysis.Serialization where
 
 import Language.C.Syntax.AST
-import Language.C.Data.Node
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
@@ -90,7 +89,7 @@ checkPtrInMemoryMappedFiles ast@(CTranslUnit decls _) =
 
 -- | Flag calls to shared-memory functions (the region may receive pointers).
 checkPtrInSharedMemory :: CTranslUnit -> [Issue]
-checkPtrInSharedMemory ast@(CTranslUnit decls _) =
+checkPtrInSharedMemory (CTranslUnit decls _) =
     concatMap (analyzeDecl checkShmCall Map.empty) decls
   where
     checkShmCall _env (CCall (CVar (Ident fname _ _) _) _ info)

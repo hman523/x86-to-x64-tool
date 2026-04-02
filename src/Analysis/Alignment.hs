@@ -28,6 +28,7 @@ getMemberTypes :: CDeclaration NodeInfo -> [CType]
 getMemberTypes (CDecl specs declrs _) =
     [ resolveType specs derived
     | (Just (CDeclr _ derived _ _ _), _, _) <- declrs ]
+getMemberTypes (CStaticAssert _ _ _) = []
 
 -- | True if the attribute list contains @packed@ / @__packed__@.
 isPackedStruct :: [CAttribute NodeInfo] -> Bool
@@ -146,7 +147,7 @@ checkSizeofStoredIn32bits ast@(CTranslUnit decls _) =
 -- | Flag malloc/calloc calls whose size argument is a raw integer literal
 --   (the programmer likely hardcoded the struct size instead of using sizeof).
 checkHardCodedStructSizes :: CTranslUnit -> [Issue]
-checkHardCodedStructSizes ast@(CTranslUnit decls _) =
+checkHardCodedStructSizes (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env (CCall (CVar (Ident fname _ _) _) args info)

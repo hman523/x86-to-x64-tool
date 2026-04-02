@@ -1,7 +1,6 @@
 module Analysis.PointerMath where
 
 import Language.C.Syntax.AST
-import Language.C.Data.Node
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal

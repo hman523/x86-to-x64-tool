@@ -271,7 +271,7 @@ prettyPrintIssues verbose useColor termWidth issues =
                                    ("Declared at " ++ posFile (posOf ni)
                                     ++ ":" ++ show (posRow (posOf ni)) ++ ".")
             in num ++ sevStr ++ " " ++ loc ++ " " ++ tagStr ++ " " ++ catStr ++ explanation
-    in unlines $ map fmt (zip [1..] issues)
+    in unlines $ map fmt (zip [(1::Int)..] issues)
 
 createIssue :: NodeInfo -> Severity -> IssueTag -> Issue
 createIssue pos sev tag = Issue pos Nothing sev tag (getCategory tag)

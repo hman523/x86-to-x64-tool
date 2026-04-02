@@ -91,6 +91,7 @@ collectDecl (CDecl specs declrs _) env =
     addDeclr s (Just (CDeclr (Just (Ident name _ _)) derived _ _ ni), _, _) acc =
         Map.insert name (resolveType s derived, Just ni) acc
     addDeclr _ _ acc = acc
+collectDecl (CStaticAssert _ _ _) env = env
 
 -- | Build a TypeEnv by walking all compound block items (handles ordering)
 buildTypeEnv :: [CCompoundBlockItem NodeInfo] -> TypeEnv -> TypeEnv
@@ -131,6 +132,7 @@ typeOfDecl (CDecl specs declrs _) =
                     (Just (CDeclr _ d _ _ _), _, _) : _ -> d
                     _                                    -> []
     in resolveType specs derived
+typeOfDecl (CStaticAssert _ _ _) = TUnknown
 
 -- | Predicate helpers used by analysis functions
 isPointer :: CType -> Bool
@@ -169,6 +171,7 @@ buildTypedefEnv (CTranslUnit decls _) = foldr collectTypedef Map.empty decls
             let baseSpecs = filter (not . isStorageSpec) specs
             in foldr (insertTypedef baseSpecs) acc declrs
         | otherwise = acc
+    collectTypedefDecl (CStaticAssert _ _ _) acc = acc
 
     isTypedefDecl ss = any isTypedefSpec ss
     isTypedefSpec (CStorageSpec (CTypedef _)) = True
@@ -203,6 +206,7 @@ buildStructEnv (CTranslUnit decls _) = foldr collectDecl' Map.empty decls
     extractMembers (CDecl specs declrs _) =
         [ (n, resolveType specs derived)
         | (Just (CDeclr (Just (Ident n _ _)) derived _ _ _), _, _) <- declrs ]
+    extractMembers (CStaticAssert _ _ _) = []
 
 -- | True if the named struct/union contains at least one pointer-typed member.
 structHasPointer :: StructEnv -> String -> Bool

@@ -1,7 +1,6 @@
 module Analysis.Comparison where
 
 import Language.C.Syntax.AST
-import Language.C.Data.Node
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
@@ -49,6 +48,7 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
     getDeclTypes tenv (CDecl specs declrs _) =
         [ resolveTypedef tenv (resolveType specs derived)
         | (Just (CDeclr _ derived _ _ _), _, _) <- declrs ]
+    getDeclTypes _ (CStaticAssert _ _ _) = []
 
     -- True if an expression tree contains a pointer – pointer subtraction.
     hasPtrDiff tenv env expr = case expr of

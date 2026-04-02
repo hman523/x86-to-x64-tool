@@ -87,7 +87,7 @@ checkLongToPointer ast@(CTranslUnit decls _) =
 
 -- | Check for sizeof(int) == sizeof(void*) comparisons  
 checkSizeOfInt :: CTranslUnit -> [Issue]
-checkSizeOfInt ast@(CTranslUnit decls _) =
+checkSizeOfInt (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr :: TypeEnv -> CExpression NodeInfo -> [Issue]
@@ -104,7 +104,7 @@ checkSizeOfInt ast@(CTranslUnit decls _) =
 
 -- | Check for sizeof(long) == sizeof(void*) comparisons
 checkSizeOfLong :: CTranslUnit -> [Issue]
-checkSizeOfLong ast@(CTranslUnit decls _) =
+checkSizeOfLong (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr :: TypeEnv -> CExpression NodeInfo -> [Issue]

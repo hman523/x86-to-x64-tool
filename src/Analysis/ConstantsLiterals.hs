@@ -2,7 +2,6 @@ module Analysis.ConstantsLiterals where
 
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (getCInteger)
-import Language.C.Data.Node
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
@@ -19,7 +18,7 @@ analyzeConstantsLiteralsIssues ast =
 -- | Flag malloc/calloc/realloc calls with a literal 4 or 8 as size
 --   (likely hardcoding a 32-bit or 64-bit pointer width assumption).
 checkMagicValuesUsed :: CTranslUnit -> [Issue]
-checkMagicValuesUsed ast@(CTranslUnit decls _) =
+checkMagicValuesUsed (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env (CCall (CVar (Ident fname _ _) _) args info)

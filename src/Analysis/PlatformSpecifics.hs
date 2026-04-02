@@ -89,7 +89,7 @@ checkHandleTypesCastToInt ast@(CTranslUnit decls _) =
 
 -- | Flag calls to x86-specific SIMD / compiler intrinsics.
 checkx86SpecificCompilerIntrinsics :: CTranslUnit -> [Issue]
-checkx86SpecificCompilerIntrinsics ast@(CTranslUnit decls _) =
+checkx86SpecificCompilerIntrinsics (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env (CVar (Ident name _ _) info) =
@@ -102,7 +102,7 @@ checkx86SpecificCompilerIntrinsics ast@(CTranslUnit decls _) =
 
 -- | Flag comparisons of sizeof(T) with the literal 4 (assumes 32-bit register size).
 checkAssumptionsAboutRegSizes :: CTranslUnit -> [Issue]
-checkAssumptionsAboutRegSizes ast@(CTranslUnit decls _) =
+checkAssumptionsAboutRegSizes (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env expr = case expr of
