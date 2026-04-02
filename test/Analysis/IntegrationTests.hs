@@ -5,7 +5,7 @@ import qualified Data.ByteString.Char8 as BS
 import Parser.Parser (parseSource)
 import Analysis.Analysis (analysis)
 import Analysis.AnalysisTestUtils
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 import Data.List (nub, (\\))
 
 integrationSpec :: Spec

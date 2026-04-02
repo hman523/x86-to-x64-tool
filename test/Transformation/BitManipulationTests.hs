@@ -3,7 +3,7 @@ module Transformation.BitManipulationTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.BitManipulation
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 bitManipulationTransformSpec :: Spec
 bitManipulationTransformSpec = describe "BitManipulation Transformations" $ do

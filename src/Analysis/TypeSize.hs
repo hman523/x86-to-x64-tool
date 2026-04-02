@@ -3,7 +3,8 @@ module Analysis.TypeSize where
 import Language.C.Syntax.AST
 import Language.C.Data.Node
 import Language.C.Data.Ident
-import Analysis.UtilTypes
+import Analysis.IssueTypes
+import Analysis.ASTTraversal
 import Analysis.TypeChecker
 import qualified Data.Map as Map
 

@@ -3,7 +3,7 @@ module Analysis.TypeSizeTests where
 import Test.Hspec
 import Analysis.TypeSize (analyzeTypeSizeIssues, checkPointerToInt, checkPointerToUInt, checkIntToPointer, checkLongToPointer, checkSizeOfInt, checkSizeOfLong, checkIntAsSizet, checkIntAsPtrdifft, checkUIntAsMemSize)
 import Analysis.AnalysisTestUtils
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 typeSizeSpec :: Spec
 typeSizeSpec = do

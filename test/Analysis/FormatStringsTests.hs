@@ -3,7 +3,7 @@ module Analysis.FormatStringsTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.FormatStrings
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 formatStringsSpec :: Spec
 formatStringsSpec = describe "FormatStrings Analysis" $ do

@@ -1,7 +1,7 @@
 module Transformation.ConstantsLiterals where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformConstantsLiteralsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformConstantsLiteralsIssues ast issues = foldl applyOne (ast, []) issues

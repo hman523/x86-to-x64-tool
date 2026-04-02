@@ -3,7 +3,7 @@ module Transformation.ConstantsLiteralsTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.ConstantsLiterals
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 constantsLiteralsTransformSpec :: Spec
 constantsLiteralsTransformSpec = describe "ConstantsLiterals Transformations" $ do

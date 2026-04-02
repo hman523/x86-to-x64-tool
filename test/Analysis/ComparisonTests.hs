@@ -3,7 +3,7 @@ module Analysis.ComparisonTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.Comparison
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 comparisonSpec :: Spec
 comparisonSpec = describe "Comparison Analysis" $ do

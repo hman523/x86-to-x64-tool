@@ -1,7 +1,7 @@
 module Transformation.PlatformSpecifics where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformPlatformSpecificsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformPlatformSpecificsIssues ast issues = foldl applyOne (ast, []) issues

@@ -1,7 +1,7 @@
 module Transformation.TypeSize where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformTypeSizeIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformTypeSizeIssues ast issues = foldl applyOne (ast, []) issues

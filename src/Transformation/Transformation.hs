@@ -1,7 +1,7 @@
 module Transformation.Transformation where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 import qualified Transformation.Alignment          as Align
 import qualified Transformation.BitManipulation    as Bit
 import qualified Transformation.Comparison         as Cmp

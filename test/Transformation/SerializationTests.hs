@@ -3,7 +3,7 @@ module Transformation.SerializationTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.Serialization
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 serializationTransformSpec :: Spec
 serializationTransformSpec = describe "Serialization Transformations" $ do

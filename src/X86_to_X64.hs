@@ -24,7 +24,7 @@ import Text.PrettyPrint      (render)
 
 import Parser.Parser         (parseSourceFile, parseSourceString)
 import Analysis.Analysis     (analysis)
-import Analysis.UtilTypes    (Issue(..), IssueTag(..), Severity(..), prettyPrintIssues)
+import Analysis.IssueTypes    (Issue(..), IssueTag(..), Severity(..), prettyPrintIssues)
 import Transformation.Transformation (transformation)
 
 -- ---------------------------------------------------------------------------

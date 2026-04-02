@@ -1,7 +1,7 @@
 module Analysis.Analysis where 
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 import Analysis.Alignment
 import Analysis.BitManipulation
 import Analysis.Comparison

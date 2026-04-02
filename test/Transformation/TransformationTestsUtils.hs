@@ -7,7 +7,7 @@ import Language.C.Syntax.AST
 import Language.C.Pretty (pretty)
 import Text.PrettyPrint (render)
 import Parser.Parser (parseSourceString)
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 -- | Parse source, run the analyser to obtain issues, run the module-level
 -- transformer, assert no issues remain unresolved, and re-run the analyser

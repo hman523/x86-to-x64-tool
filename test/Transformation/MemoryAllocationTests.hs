@@ -3,7 +3,7 @@ module Transformation.MemoryAllocationTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.MemoryAllocation
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 memoryAllocationTransformSpec :: Spec
 memoryAllocationTransformSpec = describe "MemoryAllocation Transformations" $ do

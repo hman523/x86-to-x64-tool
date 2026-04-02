@@ -3,7 +3,7 @@ module Transformation.PlatformSpecificsTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.PlatformSpecifics
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 platformSpecificsTransformSpec :: Spec
 platformSpecificsTransformSpec = describe "PlatformSpecifics Transformations" $ do

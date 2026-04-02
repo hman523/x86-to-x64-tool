@@ -1,7 +1,7 @@
 module Transformation.Comparison where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformComparisonIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformComparisonIssues ast issues = foldl applyOne (ast, []) issues

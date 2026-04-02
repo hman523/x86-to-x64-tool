@@ -1,7 +1,7 @@
 module Transformation.FunctionSignatures where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformFunctionSignaturesIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformFunctionSignaturesIssues ast issues = foldl applyOne (ast, []) issues

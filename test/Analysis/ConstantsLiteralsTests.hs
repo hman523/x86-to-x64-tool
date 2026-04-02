@@ -3,7 +3,7 @@ module Analysis.ConstantsLiteralsTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.ConstantsLiterals
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 constantsLiteralsSpec :: Spec
 constantsLiteralsSpec = describe "ConstantsLiterals Analysis" $ do

@@ -3,7 +3,7 @@ module Transformation.TypeSizeTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.TypeSize
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 typeSizeTransformSpec :: Spec
 typeSizeTransformSpec = describe "TypeSize Transformations" $ do

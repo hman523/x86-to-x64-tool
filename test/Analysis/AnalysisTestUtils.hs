@@ -5,7 +5,7 @@ import Data.List (sort, nub, (\\))
 import qualified Data.ByteString.Char8 as BS
 import Language.C.Syntax.AST
 import Parser.Parser (parseSourceString)
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 shouldFlagError :: String -> String -> (CTranslUnit -> [Issue]) -> Spec
 shouldFlagError testName code checker =

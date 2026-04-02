@@ -1,7 +1,7 @@
 module Transformation.BitManipulation where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformBitManipulationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformBitManipulationIssues ast issues = foldl applyOne (ast, []) issues

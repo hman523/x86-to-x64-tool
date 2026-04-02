@@ -1,7 +1,7 @@
 module Transformation.Alignment where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformAlignmentIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformAlignmentIssues ast issues = foldl applyOne (ast, []) issues

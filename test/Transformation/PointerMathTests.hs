@@ -3,7 +3,7 @@ module Transformation.PointerMathTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.PointerMath
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 pointerMathTransformSpec :: Spec
 pointerMathTransformSpec = describe "PointerMath Transformations" $ do

@@ -3,7 +3,7 @@ module Analysis.FunctionSignaturesTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.FunctionSignatures
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 functionSignaturesSpec :: Spec
 functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do

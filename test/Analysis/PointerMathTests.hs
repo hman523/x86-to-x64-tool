@@ -3,7 +3,7 @@ module Analysis.PointerMathTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.PointerMath
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 pointerMathSpec :: Spec
 pointerMathSpec = describe "PointerMath Analysis" $ do

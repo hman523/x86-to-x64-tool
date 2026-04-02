@@ -5,7 +5,8 @@ import Language.C.Syntax.Constants (getCInteger, CString(..))
 import Language.C.Data.Node
 import Language.C.Data.Ident
 import Data.List (isPrefixOf, isInfixOf)
-import Analysis.UtilTypes
+import Analysis.IssueTypes
+import Analysis.ASTTraversal
 import Analysis.TypeChecker
 import qualified Data.Map as Map
 

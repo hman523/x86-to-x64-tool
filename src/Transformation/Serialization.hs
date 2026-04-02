@@ -1,7 +1,7 @@
 module Transformation.Serialization where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformSerializationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformSerializationIssues ast issues = foldl applyOne (ast, []) issues

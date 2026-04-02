@@ -6,7 +6,7 @@ import Language.C.Syntax.Constants (CString(..))
 import Language.C.Data.Node (NodeInfo)
 import Language.C.Data.Position (posOf)
 import Language.C.Data.Ident (Ident(..))
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 import Analysis.FormatStrings (fmtArgIndex)
 
 -- ---------------------------------------------------------------------------

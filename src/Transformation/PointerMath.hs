@@ -1,7 +1,7 @@
 module Transformation.PointerMath where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformPointerMathIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformPointerMathIssues ast issues = foldl applyOne (ast, []) issues

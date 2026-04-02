@@ -1,7 +1,7 @@
 module Transformation.MemoryAllocation where
 
 import Language.C.Syntax.AST
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 transformMemoryAllocationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues

@@ -3,7 +3,7 @@ module Analysis.AlignmentTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.Alignment
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 alignmentSpec :: Spec
 alignmentSpec = describe "Alignment Analysis" $ do

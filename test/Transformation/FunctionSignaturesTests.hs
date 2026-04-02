@@ -3,7 +3,7 @@ module Transformation.FunctionSignaturesTests where
 import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.FunctionSignatures
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 functionSignaturesTransformSpec :: Spec
 functionSignaturesTransformSpec = describe "FunctionSignatures Transformations" $ do

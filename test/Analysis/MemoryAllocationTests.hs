@@ -3,7 +3,7 @@ module Analysis.MemoryAllocationTests where
 import Test.Hspec
 import Analysis.AnalysisTestUtils
 import Analysis.MemoryAllocation
-import Analysis.UtilTypes
+import Analysis.IssueTypes
 
 memoryAllocationSpec :: Spec
 memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
