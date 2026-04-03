@@ -277,6 +277,76 @@ testTypeOfExpr =
         it "returns TUnknown for unknown variable" $
             lookupType (Map.empty :: TypeEnv) "nothere" `shouldBe` TUnknown
 
+        it "resolves int + int to TInt" $
+            let env  = Map.fromList [("x", (TInt, Nothing)), ("y", (TInt, Nothing))]
+                expr = parseExprFrom "void f() { int x, y; x + y; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves unsigned int * unsigned int to TUInt" $
+            let env  = Map.fromList [("w", (TUInt, Nothing)), ("h", (TUInt, Nothing))]
+                expr = parseExprFrom "void f() { unsigned int w, h; w * h; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TUInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves int * unsigned int to TUInt (promotion)" $
+            let env  = Map.fromList [("n", (TInt, Nothing)), ("m", (TUInt, Nothing))]
+                expr = parseExprFrom "void f() { int n; unsigned int m; n * m; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TUInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves unsigned long + int to TULong (promotion)" $
+            let env  = Map.fromList [("s", (TULong, Nothing)), ("n", (TInt, Nothing))]
+                expr = parseExprFrom "void f() { unsigned long s; int n; s + n; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TULong
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves ptr + int to same pointer type" $
+            let env  = Map.fromList [("p", (TPointer TInt, Nothing)), ("n", (TInt, Nothing))]
+                expr = parseExprFrom "void f() { int *p; int n; p + n; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TPointer TInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves ptr - ptr to TLong (ptrdiff_t)" $
+            let env  = Map.fromList [("p", (TPointer TInt, Nothing)), ("q", (TPointer TInt, Nothing))]
+                expr = parseExprFrom "void f() { int *p, *q; p - q; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TLong
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves comparison to TInt" $
+            let env  = Map.fromList [("x", (TLong, Nothing)), ("y", (TLong, Nothing))]
+                expr = parseExprFrom "void f() { long x, y; x < y; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves logical not to TInt" $
+            let env  = Map.fromList [("x", (TLong, Nothing))]
+                expr = parseExprFrom "void f() { long x; !x; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TInt
+                Nothing -> pendingWith "could not extract expr"
+
+        it "resolves unary minus to same type" $
+            let env  = Map.fromList [("x", (TLong, Nothing))]
+                expr = parseExprFrom "void f() { long x; -x; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TLong
+                Nothing -> pendingWith "could not extract expr"
+
+        it "yields TUnknown when an operand type is unknown" $
+            let env  = Map.empty
+                expr = parseExprFrom "void f() { int x; x + x; }"
+            in case expr of
+                Just e  -> typeOfExpr env e `shouldBe` TUnknown
+                Nothing -> pendingWith "could not extract expr"
+
 -- ---------------------------------------------------------------------------
 -- typeOfDecl
 -- ---------------------------------------------------------------------------
@@ -327,7 +397,7 @@ testPredicates =
 
         describe "isIntType'" $ do
             it "returns True for TInt"               $ isIntType' TInt                      `shouldBe` True
-            it "returns True for TUInt"              $ isIntType' TUInt                     `shouldBe` True
+            it "returns False for TUInt"             $ isIntType' TUInt                     `shouldBe` False
             it "returns False for TLong"             $ isIntType' TLong                     `shouldBe` False
             it "returns False for TPointer TInt"     $ isIntType' (TPointer TInt)           `shouldBe` False
             it "returns False for TUnknown"          $ isIntType' TUnknown                  `shouldBe` False

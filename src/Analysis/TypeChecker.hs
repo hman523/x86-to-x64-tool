@@ -118,12 +118,54 @@ typeOfExpr env expr = case expr of
         case typeOfExpr env inner of
             TPointer t -> t
             _          -> TUnknown
-    -- For binary ops like pointer subtraction, result is ptrdiff_t ~ TLong
-    CBinary CSubOp l r _        ->
-        case (typeOfExpr env l, typeOfExpr env r) of
-            (TPointer _, TPointer _) -> TLong
-            _                        -> TInt
+    -- Pointer arithmetic: ptr +/- int yields same pointer type
+    CBinary op l r _
+        | op `elem` [CAddOp, CSubOp] ->
+            case (typeOfExpr env l, typeOfExpr env r) of
+                (TPointer _, TPointer _) -> TLong        -- ptr - ptr = ptrdiff_t
+                (TPointer t, _)          -> TPointer t   -- ptr + int
+                (_, TPointer t)          -> TPointer t   -- int + ptr
+                (lt, rt)                 -> promoteArith lt rt
+    -- Multiplicative ops never involve pointers; just promote
+    CBinary op l r _
+        | op `elem` [CMulOp, CDivOp, CRmdOp] ->
+            promoteArith (typeOfExpr env l) (typeOfExpr env r)
+    -- Bitwise ops: result type follows usual arithmetic promotions
+    CBinary op l r _
+        | op `elem` [CAndOp, COrOp, CXorOp, CShlOp, CShrOp] ->
+            promoteArith (typeOfExpr env l) (typeOfExpr env r)
+    -- Comparison and logical ops always produce int
+    CBinary op _ _ _
+        | op `elem` [CLeOp, CGrOp, CLeqOp, CGeqOp, CEqOp, CNeqOp,
+                     CLndOp, CLorOp] -> TInt
+    -- Unary arithmetic: +x, -x, ~x preserve type; !x gives int
+    CUnary CMinOp inner _       -> typeOfExpr env inner
+    CUnary CPlusOp inner _      -> typeOfExpr env inner
+    CUnary CCompOp inner _      -> typeOfExpr env inner
+    CUnary CNegOp _ _           -> TInt
+    -- Assignment expressions have the type of the lhs
+    CAssign _ l _ _             -> typeOfExpr env l
+    -- Comma expression: type of last operand
+    CComma exprs _              -> case exprs of
+                                       [] -> TUnknown
+                                       _  -> typeOfExpr env (last exprs)
     _                           -> TUnknown
+
+-- | C usual arithmetic conversions (simplified): the higher-ranked type wins.
+-- Ranking (ascending): TInt < TUInt < TLong < TULong.  Any unknown operand
+-- yields TUnknown so callers can detect that the result is uncertain.
+promoteArith :: CType -> CType -> CType
+promoteArith TUnknown _       = TUnknown
+promoteArith _       TUnknown = TUnknown
+promoteArith l r
+    | rank l >= rank r = l
+    | otherwise        = r
+  where
+    rank TInt    = 0 :: Int
+    rank TUInt   = 1
+    rank TLong   = 2
+    rank TULong  = 3
+    rank _       = 0
 
 -- | Get the CType from a cast declaration
 typeOfDecl :: CDeclaration a -> CType
@@ -141,7 +183,7 @@ isPointer _            = False
 
 isIntType' :: CType -> Bool
 isIntType' TInt  = True
-isIntType' TUInt = True
+--isIntType' TUInt = True
 isIntType' _     = False
 
 isLongType' :: CType -> Bool

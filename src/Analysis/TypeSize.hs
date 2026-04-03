@@ -185,10 +185,13 @@ checkUIntAsMemSize ast@(CTranslUnit decls _) =
     checkAlloc tenv env expr = case expr of
         CCall (CVar (Ident fname _ _) _) args info
             | fname `elem` ["malloc", "calloc", "realloc"] ->
-                [ createIssue info Warning UsingUIntAsMemSize
+                [ createIssueWithDecl info mDeclPos Warning UsingUIntAsMemSize
                 | arg <- args
                 , let t = resolveTypedef tenv (typeOfExpr env arg)
                 , isIntType' t || isUIntType t
+                , let mDeclPos = case arg of
+                        CVar (Ident name _ _) _ -> lookupDeclPos env name
+                        _                       -> Nothing
                 ]
         _ -> []
 
