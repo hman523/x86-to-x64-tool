@@ -2,6 +2,7 @@ module Transformation.ConstantsLiterals where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformConstantsLiteralsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformConstantsLiteralsIssues ast issues = foldl applyOne (ast, []) issues
@@ -17,14 +18,31 @@ transformConstantsLiteralsIssues ast issues = foldl applyOne (ast, []) issues
       ConstantsUsedForSizeCalcs  -> transformConstantsUsedForSizeCalcs  a issue
       _                          -> (a, Just issue)
 
+-- Cannot be done automatically: malloc(4) or malloc(8) uses a literal that
+-- likely encodes an assumed pointer size. The correct replacement is
+-- malloc(sizeof(T)) for some T, but the tool cannot determine which type
+-- the programmer intended to allocate.
 transformMagicValuesUsed :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformMagicValuesUsed ast issue = (ast, Just issue)
+transformMagicValuesUsed = untransformable
 
+-- Cannot be done automatically: ptr & 0xFFFFFFFF masks to 32 bits, assuming
+-- a 32-bit pointer. On 64-bit the programmer may want only the lower 32 bits,
+-- the full 64-bit value, or a different mask altogether. Both the mask literal
+-- and the receiving variable's type may need to change in a way that depends
+-- on intent.
 transformBitMaskingAssuming32bitPts :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformBitMaskingAssuming32bitPts ast issue = (ast, Just issue)
+transformBitMaskingAssuming32bitPts = untransformable
 
+-- Cannot be done automatically: (T*)0xDEADBEEF is a hardware or MMIO address
+-- specific to a 32-bit memory map. The correct 64-bit address is not derivable
+-- from the source — it depends on the platform's 64-bit memory map, which is
+-- external knowledge the tool does not have.
 transformHardCodedAddressValues :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformHardCodedAddressValues ast issue = (ast, Just issue)
+transformHardCodedAddressValues = untransformable
 
+-- Cannot be done automatically: a literal integer assigned to a size_t variable
+-- (e.g., size_t s = 4) may encode a pointer size, a struct size, or an
+-- unrelated count. The tool cannot determine which interpretation is correct,
+-- nor what the right 64-bit value would be.
 transformConstantsUsedForSizeCalcs :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformConstantsUsedForSizeCalcs ast issue = (ast, Just issue)
+transformConstantsUsedForSizeCalcs = untransformable

@@ -47,12 +47,20 @@ transformCastLongToPointer :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 transformCastLongToPointer ast issue =
     (replaceCastType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
 
--- | sizeof comparisons can't be auto-fixed: leave unresolved.
+-- Cannot be done automatically: sizeof(int) == sizeof(void*) was true on
+-- 32-bit but is false on 64-bit. The condition guards code that assumes
+-- pointer-sized ints; the branch taken on 32-bit may now need to become the
+-- unconditional path, or the entire guarded block may need redesigning. The
+-- tool cannot know which branch reflects the intended 64-bit behavior.
 transformSizeOfIntIsVoid :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformSizeOfIntIsVoid ast issue = (ast, Just issue)
+transformSizeOfIntIsVoid = untransformable
 
+-- Cannot be done automatically: sizeof(long) == sizeof(void*) is true on
+-- 64-bit Linux (LP64) but false on 64-bit Windows (LLP64). The correct fix
+-- is to use intptr_t on both platforms, but only after understanding whether
+-- the code's correctness assumption targets Linux or Windows specifically.
 transformSizeOfLongIsVoid :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformSizeOfLongIsVoid ast issue = (ast, Just issue)
+transformSizeOfLongIsVoid = untransformable
 
 -- ---------------------------------------------------------------------------
 -- Declaration retyping

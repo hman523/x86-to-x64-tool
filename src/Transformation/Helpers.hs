@@ -5,6 +5,12 @@ import Language.C.Syntax.AST
 import Language.C.Data.Node (NodeInfo, undefNode)
 import Language.C.Data.Ident (Ident(..))
 import Language.C.Data.Position (posOf)
+import Analysis.IssueTypes (Issue)
+
+-- | Identity transformation: leave the AST unchanged and report the issue
+--   as unresolved. Use this for transformations that cannot be automated.
+untransformable :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+untransformable ast issue = (ast, Just issue)
 
 -- | Build a single typedef-name type specifier, e.g. @typedefSpec "intptr_t"@.
 typedefSpec :: String -> CDeclarationSpecifier NodeInfo
