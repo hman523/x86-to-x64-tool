@@ -19,16 +19,16 @@ transformSerializationIssues ast issues = foldl applyOne (ast, []) issues
       _                                   -> (a, Just issue)
 
 transformWritingPtrDirectToFile :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformWritingPtrDirectToFile _ issue = undefined
+transformWritingPtrDirectToFile ast issue = (ast, Just issue)
 
 transformWritingPtrContrainingStructsToFiles :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformWritingPtrContrainingStructsToFiles _ issue = undefined
+transformWritingPtrContrainingStructsToFiles ast issue = (ast, Just issue)
 
 transformSendingPtrsOverNetwork :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformSendingPtrsOverNetwork _ issue = undefined
+transformSendingPtrsOverNetwork ast issue = (ast, Just issue)
 
 transformPtrInMemoryMappedFiles :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPtrInMemoryMappedFiles _ issue = undefined
+transformPtrInMemoryMappedFiles ast issue = (ast, Just issue)
 
 transformPtrInSharedMemory :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPtrInSharedMemory _ issue = undefined
+transformPtrInSharedMemory ast issue = (ast, Just issue)

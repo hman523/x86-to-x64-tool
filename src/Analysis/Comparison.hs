@@ -29,7 +29,8 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
             let env'       = collectDecl decl env
                 ctrTypes   = getDeclTypes tenv decl
                 condHasPD  = hasPtrDiff tenv env' cond
-            in [ createIssue info Warning LoopCounterAsIntWhenIteratingOverPtrArrays
+                mDeclPos   = firstDeclrNi decl
+            in [ createIssueWithDecl info mDeclPos Warning LoopCounterAsIntWhenIteratingOverPtrArrays
                | any isIntType' ctrTypes && condHasPD ]
                ++ walkStmt tenv env' body
         CCompound _ items _ ->
@@ -49,6 +50,10 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
         [ resolveTypedef tenv (resolveType specs derived)
         | (Just (CDeclr _ derived _ _ _), _, _) <- declrs ]
     getDeclTypes _ (CStaticAssert _ _ _) = []
+
+    -- Extract the CDeclr NodeInfo from the first declarator in a CDecl
+    firstDeclrNi (CDecl _ ((Just (CDeclr _ _ _ _ ni), _, _) : _) _) = Just ni
+    firstDeclrNi _                                                    = Nothing
 
     -- True if an expression tree contains a pointer – pointer subtraction.
     hasPtrDiff tenv env expr = case expr of
@@ -90,7 +95,10 @@ checkUsingIntForFileOffsets ast@(CTranslUnit decls _) =
     checkCall tenv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` seekFns, length args >= 2 =
             let offsetType = resolveTypedef tenv (typeOfExpr env (args !! 1))
-            in [ createIssue info Warning UsingIntForFileOffsets
+                mDeclPos   = case args !! 1 of
+                    CVar (Ident name _ _) _ -> lookupDeclPos env name
+                    _                       -> Nothing
+            in [ createIssueWithDecl info mDeclPos Warning UsingIntForFileOffsets
                | isIntType' offsetType ]
     checkCall _ _ _ = []
 

@@ -78,6 +78,7 @@ library
         Analysis.Serialization,
         Analysis.TypeSize,
         Transformation.Transformation,
+        Transformation.Helpers,
         Transformation.Alignment,
         Transformation.BitManipulation,
         Transformation.Comparison,

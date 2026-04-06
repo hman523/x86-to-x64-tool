@@ -17,10 +17,10 @@ transformBitManipulationIssues ast issues = foldl applyOne (ast, []) issues
       _                           -> (a, Just issue)
 
 transformPackingPtrsWithFlagsInInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPackingPtrsWithFlagsInInt _ issue = undefined
+transformPackingPtrsWithFlagsInInt ast issue = (ast, Just issue)
 
 transformBitShiftsOnPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformBitShiftsOnPtr _ issue = undefined
+transformBitShiftsOnPtr ast issue = (ast, Just issue)
 
 transformExtractingPtrBitsIn32BitVar :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformExtractingPtrBitsIn32BitVar _ issue = undefined
+transformExtractingPtrBitsIn32BitVar ast issue = (ast, Just issue)

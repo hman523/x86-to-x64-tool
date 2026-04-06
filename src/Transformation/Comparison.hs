@@ -2,6 +2,7 @@ module Transformation.Comparison where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformComparisonIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformComparisonIssues ast issues = foldl applyOne (ast, []) issues
@@ -17,10 +18,14 @@ transformComparisonIssues ast issues = foldl applyOne (ast, []) issues
       _                                          -> (a, Just issue)
 
 transformLoopCounterAsIntWhenIteratingOverPtrArrays :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformLoopCounterAsIntWhenIteratingOverPtrArrays _ issue = undefined
+transformLoopCounterAsIntWhenIteratingOverPtrArrays ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "ptrdiff_t") ast, Nothing)
+    Nothing -> (ast, Just issue)
 
 transformPtrComparisonWithIntConsts :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPtrComparisonWithIntConsts _ issue = undefined
+transformPtrComparisonWithIntConsts ast issue = (ast, Just issue)
 
 transformUsingIntForFileOffsets :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUsingIntForFileOffsets _ issue = undefined
+transformUsingIntForFileOffsets ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "off_t") ast, Nothing)
+    Nothing -> (ast, Just issue)

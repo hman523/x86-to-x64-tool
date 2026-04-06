@@ -12,6 +12,7 @@ import Transformation.PlatformSpecificsTests
 import Transformation.PointerMathTests
 import Transformation.SerializationTests
 import Transformation.TypeSizeTests
+import Transformation.IntegrationTests
 
 transformationSpec :: Spec
 transformationSpec = describe "Transformation Tests" $ do
@@ -26,3 +27,4 @@ transformationSpec = describe "Transformation Tests" $ do
   pointerMathTransformSpec
   serializationTransformSpec
   typeSizeTransformSpec
+  transformationIntegrationSpec

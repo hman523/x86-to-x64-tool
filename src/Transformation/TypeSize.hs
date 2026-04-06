@@ -1,11 +1,8 @@
 module Transformation.TypeSize where
 
-import Data.Generics (everywhere, mkT)
 import Language.C.Syntax.AST
-import Language.C.Data.Node (NodeInfo, undefNode)
-import Language.C.Data.Ident (Ident(..))
-import Language.C.Data.Position (posOf)
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformTypeSizeIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformTypeSizeIssues ast issues = foldl applyOne (ast, []) issues
@@ -85,54 +82,5 @@ transformUsingUIntAsMemSize ast issue =
         Nothing -> (ast, Just issue)
         Just ni -> (retypeDecl ni (typedefSpec "size_t") ast, Nothing)
 
--- ---------------------------------------------------------------------------
--- AST rewriting helpers
--- ---------------------------------------------------------------------------
-
--- | Build a single typedef-name type specifier for the given name,
---   e.g. @typedefSpec "intptr_t"@ produces the spec for @intptr_t@.
-typedefSpec :: String -> CDeclarationSpecifier NodeInfo
-typedefSpec name =
-    CTypeSpec (CTypeDef (Ident name 0 undefNode) undefNode)
-
--- | Walk the AST and, at any CCast node whose NodeInfo matches the target
---   position, replace all type specifiers in the cast declaration with the
---   single supplied specifier (stripping derived declarators so the result is
---   a plain named type).
-replaceCastType :: NodeInfo
-                -> CDeclarationSpecifier NodeInfo
-                -> CTranslUnit
-                -> CTranslUnit
-replaceCastType targetInfo newSpec = everywhere (mkT fixCast)
-  where
-    fixCast :: CExpression NodeInfo -> CExpression NodeInfo
-    fixCast (CCast (CDecl _ declrs ni) inner info)
-        | posOf info == posOf targetInfo
-        = CCast (CDecl [newSpec] declrs ni) inner info
-    fixCast e = e
-
--- | Walk the AST and, at any CDecl containing a declarator whose NodeInfo
---   matches the target position, replace all its type specifiers with the
---   single supplied specifier.
---
---   NOTE: @lookupDeclPos@ stores the @CDeclr@ NodeInfo, not the @CDecl@
---   NodeInfo, so we match against the inner declarator positions.
-retypeDecl :: NodeInfo
-           -> CDeclarationSpecifier NodeInfo
-           -> CTranslUnit
-           -> CTranslUnit
-retypeDecl targetInfo newSpec = everywhere (mkT fixDecl)
-  where
-    fixDecl :: CDeclaration NodeInfo -> CDeclaration NodeInfo
-    fixDecl (CDecl specs declrs ni)
-        | any hasDeclrAt declrs
-        -- Keep only non-type specifiers (storage class, qualifiers, etc.)
-        -- and prepend the new type spec.
-        = CDecl (newSpec : filter (not . isTypeSpec) specs) declrs ni
-    fixDecl d = d
-
-    isTypeSpec (CTypeSpec _) = True
-    isTypeSpec _             = False
-
-    hasDeclrAt (Just (CDeclr _ _ _ _ dNi), _, _) = posOf dNi == posOf targetInfo
-    hasDeclrAt _                                  = False
+-- Helpers (typedefSpec, replaceCastType, retypeDecl) are re-exported
+-- from Transformation.Helpers via the import above.

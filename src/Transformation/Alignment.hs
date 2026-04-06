@@ -2,6 +2,7 @@ module Transformation.Alignment where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformAlignmentIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformAlignmentIssues ast issues = foldl applyOne (ast, []) issues
@@ -21,22 +22,24 @@ transformAlignmentIssues ast issues = foldl applyOne (ast, []) issues
       _                                   -> (a, Just issue)
 
 transformStructContainingPtrWrittenToBinFile :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformStructContainingPtrWrittenToBinFile _ issue = undefined
+transformStructContainingPtrWrittenToBinFile ast issue = (ast, Just issue)
 
 transformStrucContainingPtrReadFromBinFile :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformStrucContainingPtrReadFromBinFile _ issue = undefined
+transformStrucContainingPtrReadFromBinFile ast issue = (ast, Just issue)
 
 transformStructsWithMixedPtrNonPtrMembers :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformStructsWithMixedPtrNonPtrMembers _ issue = undefined
+transformStructsWithMixedPtrNonPtrMembers ast issue = (ast, Just issue)
 
 transformUnionsContainingPtrAndInts :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUnionsContainingPtrAndInts _ issue = undefined
+transformUnionsContainingPtrAndInts ast issue = (ast, Just issue)
 
 transformPackedStructsWithPtrs :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPackedStructsWithPtrs _ issue = undefined
+transformPackedStructsWithPtrs ast issue = (ast, Just issue)
 
 transformSizeofStoredin32bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformSizeofStoredin32bits _ issue = undefined
+transformSizeofStoredin32bits ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "size_t") ast, Nothing)
+    Nothing -> (ast, Just issue)
 
 transformHardCodedStructSizes :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformHardCodedStructSizes _ issue = undefined
+transformHardCodedStructSizes ast issue = (ast, Just issue)

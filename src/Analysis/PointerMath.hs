@@ -67,7 +67,10 @@ checkArrayIndexingIntInArrayOver2tothe31size ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkExpr tenv) Map.empty) decls
   where
     checkExpr tenv env (CIndex _ idx info) =
-        let idxType = resolveTypedef tenv (typeOfExpr env idx)
-        in [ createIssue info Warning ArrayIndexingIntInArrayOver2tothe31size
+        let idxType  = resolveTypedef tenv (typeOfExpr env idx)
+            mDeclPos = case idx of
+                CVar (Ident name _ _) _ -> lookupDeclPos env name
+                _                       -> Nothing
+        in [ createIssueWithDecl info mDeclPos Warning ArrayIndexingIntInArrayOver2tothe31size
            | isIntType' idxType ]
     checkExpr _ _ _ = []

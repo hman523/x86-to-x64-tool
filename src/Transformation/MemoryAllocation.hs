@@ -2,6 +2,7 @@ module Transformation.MemoryAllocation where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformMemoryAllocationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
@@ -17,10 +18,12 @@ transformMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
       _                              -> (a, Just issue)
 
 transformAllocationSizeCalcsMayOverflow :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformAllocationSizeCalcsMayOverflow _ issue = undefined
+transformAllocationSizeCalcsMayOverflow ast issue = (ast, Just issue)
 
 transformMallocWithoutOverflowChecking :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformMallocWithoutOverflowChecking _ issue = undefined
+transformMallocWithoutOverflowChecking ast issue = (ast, Just issue)
 
 transformUsingIntToStoreAllocationSizes :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUsingIntToStoreAllocationSizes _ issue = undefined
+transformUsingIntToStoreAllocationSizes ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "size_t") ast, Nothing)
+    Nothing -> (ast, Just issue)

@@ -2,6 +2,7 @@ module Transformation.PointerMath where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformPointerMathIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformPointerMathIssues ast issues = foldl applyOne (ast, []) issues
@@ -18,13 +19,17 @@ transformPointerMathIssues ast issues = foldl applyOne (ast, []) issues
       _                                       -> (a, Just issue)
 
 transformPtrDiffStoredAs32bit :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPtrDiffStoredAs32bit _ issue = undefined
+transformPtrDiffStoredAs32bit ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "ptrdiff_t") ast, Nothing)
+    Nothing -> (ast, Just issue)
 
 transformPointerAddOverflow :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPointerAddOverflow _ issue = undefined
+transformPointerAddOverflow ast issue = (ast, Just issue)
 
 transformPtrSubUnderflow :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformPtrSubUnderflow _ issue = undefined
+transformPtrSubUnderflow ast issue = (ast, Just issue)
 
 transformArrayIndexingIntInArrayOver2tothe31size :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformArrayIndexingIntInArrayOver2tothe31size _ issue = undefined
+transformArrayIndexingIntInArrayOver2tothe31size ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "ptrdiff_t") ast, Nothing)
+    Nothing -> (ast, Just issue)

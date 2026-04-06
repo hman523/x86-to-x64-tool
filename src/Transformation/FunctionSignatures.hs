@@ -2,6 +2,7 @@ module Transformation.FunctionSignatures where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
+import Transformation.Helpers
 
 transformFunctionSignaturesIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
 transformFunctionSignaturesIssues ast issues = foldl applyOne (ast, []) issues
@@ -18,13 +19,18 @@ transformFunctionSignaturesIssues ast issues = foldl applyOne (ast, []) issues
       _                              -> (a, Just issue)
 
 transformFnsReturnPtrAsInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformFnsReturnPtrAsInt _ issue = undefined
+transformFnsReturnPtrAsInt ast issue =
+    (wrapReturnExpr (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
 
 transformFnsReturnPtrAsLong :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformFnsReturnPtrAsLong _ issue = undefined
+transformFnsReturnPtrAsLong ast issue =
+    (wrapReturnExpr (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
 
 transformFnsParamDeclaredAsIntTakesPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformFnsParamDeclaredAsIntTakesPtr _ issue = undefined
+transformFnsParamDeclaredAsIntTakesPtr ast issue = case issueDeclPos issue of
+    Just ni -> (retypeDecl ni (typedefSpec "intptr_t") ast, Nothing)
+    Nothing -> (ast, Just issue)
 
 transformVaargUsingWrongTypesForPtrArgs :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformVaargUsingWrongTypesForPtrArgs _ issue = undefined
+transformVaargUsingWrongTypesForPtrArgs ast issue =
+    (replaceVaArgType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)

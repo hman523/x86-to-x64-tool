@@ -18,13 +18,13 @@ transformConstantsLiteralsIssues ast issues = foldl applyOne (ast, []) issues
       _                          -> (a, Just issue)
 
 transformMagicValuesUsed :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformMagicValuesUsed _ issue = undefined
+transformMagicValuesUsed ast issue = (ast, Just issue)
 
 transformBitMaskingAssuming32bitPts :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformBitMaskingAssuming32bitPts _ issue = undefined
+transformBitMaskingAssuming32bitPts ast issue = (ast, Just issue)
 
 transformHardCodedAddressValues :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformHardCodedAddressValues _ issue = undefined
+transformHardCodedAddressValues ast issue = (ast, Just issue)
 
 transformConstantsUsedForSizeCalcs :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformConstantsUsedForSizeCalcs _ issue = undefined
+transformConstantsUsedForSizeCalcs ast issue = (ast, Just issue)
