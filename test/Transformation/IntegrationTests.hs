@@ -116,6 +116,168 @@ transformationIntegrationSpec = describe "Transformation Integration" $ do
         Right (_, unresolved) ->
           map issueType unresolved `shouldSatisfy` (StructsWithMixedPtrNonPtrMembers `elem`)
 
+  -- -------------------------------------------------------------------
+  -- everything at once
+  -- -------------------------------------------------------------------
+  describe "everything at once" $ do
+
+    result <- runIO $ transformFile "test/c_progs/everything_at_once.c"
+
+    it "transforms everything_at_once.c without error" $
+      result `shouldSatisfy` isRightPair
+
+    -- TypeSize: cast rewrites -----------------------------------------
+
+    it "rewrites (int)ptr cast to (intptr_t) — CastPointerToInt" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "intptr_t"
+
+    it "rewrites (T*)long cast to (intptr_t) — CastLongToPointer" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "intptr_t"
+
+    it "retypes unsigned int malloc-size variable to size_t — UsingUIntAsMemSize" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "size_t"
+
+    -- FunctionSignatures rewrites -------------------------------------
+
+    it "wraps returned pointer in (intptr_t) cast — FnsReturnPtrAsInt" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "intptr_t"
+
+    it "retypes int parameter receiving a pointer to intptr_t — FnsParamDeclaredAsIntTakesPtr" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "intptr_t"
+
+    -- PointerMath rewrites --------------------------------------------
+
+    it "retypes ptr-diff variable to ptrdiff_t — PtrDiffStoredAs32bit" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "ptrdiff_t"
+
+    it "retypes array-index variable to ptrdiff_t — ArrayIndexingIntInArrayOver2tothe31size" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "ptrdiff_t"
+
+    -- Comparison rewrites ---------------------------------------------
+
+    it "retypes int loop counter over pointer range to ptrdiff_t — LoopCounterAsIntWhenIteratingOverPtrArrays" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "ptrdiff_t"
+
+    it "retypes int file-offset variable to off_t — UsingIntForFileOffsets" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "off_t"
+
+    -- MemoryAllocation rewrites ---------------------------------------
+
+    it "retypes int malloc-size variables to size_t — UsingIntToStoreAllocationSizes" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "size_t"
+
+    -- Alignment rewrites ----------------------------------------------
+
+    it "retypes int variable storing sizeof result to size_t — SizeofStoredin32bits" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "size_t"
+
+    -- FormatStrings rewrites ------------------------------------------
+
+    it "rewrites %d to %p for pointer argument — DUsedWithPtr" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "%p"
+
+    it "rewrites %ld to %td for long argument — LdUsedWithLongAssuming64bits" $
+      case result of
+        Left err       -> fail err
+        Right (src, _) -> src `shouldContain` "%td"
+
+    -- Unresolvable issues ---------------------------------------------
+
+    it "StructsWithMixedPtrNonPtrMembers is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (StructsWithMixedPtrNonPtrMembers `elem`)
+
+    it "UnionsContainingPtrAndInts is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (UnionsContainingPtrAndInts `elem`)
+
+    it "AsmBlocks is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (AsmBlocks `elem`)
+
+    it "InlineAsmWithx86Instructions is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (InlineAsmWithx86Instructions `elem`)
+
+    it "X86SpecificCompilerIntrinsics is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (X86SpecificCompilerIntrinsics `elem`)
+
+    it "PackingPtrsWithFlagsInInt is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (PackingPtrsWithFlagsInInt `elem`)
+
+    it "BitShiftsOnPtr is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (BitShiftsOnPtr `elem`)
+
+    it "AllocationSizeCalcsMayOverflow is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (AllocationSizeCalcsMayOverflow `elem`)
+
+    it "WritingPtrDirectToFile is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (WritingPtrDirectToFile `elem`)
+
+    it "SendingPtrsOverNetwork is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (SendingPtrsOverNetwork `elem`)
+
+    it "PtrInSharedMemory is left unresolved" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) ->
+          map issueType unresolved `shouldSatisfy` (PtrInSharedMemory `elem`)
+
+    it "at least 20 issues remain unresolved after transformation" $
+      case result of
+        Left err              -> fail err
+        Right (_, unresolved) -> length unresolved `shouldSatisfy` (>= 20)
+
 -- ---------------------------------------------------------------------------
 -- Predicate helpers
 -- ---------------------------------------------------------------------------
