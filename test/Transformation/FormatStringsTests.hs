@@ -4,7 +4,6 @@ import Test.Hspec
 import Transformation.TransformationTestsUtils
 import Transformation.FormatStrings
 import Analysis.FormatStrings
-import Analysis.IssueTypes
 
 formatStringsTransformSpec :: Spec
 formatStringsTransformSpec = describe "FormatStrings Transformations" $ do

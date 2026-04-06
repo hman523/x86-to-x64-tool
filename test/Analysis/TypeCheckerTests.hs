@@ -2,11 +2,8 @@ module Analysis.TypeCheckerTests where
 
 import Test.Hspec
 import Language.C
-import Language.C.Data.Node
 import Analysis.TypeChecker
 import qualified Data.Map.Strict as Map
-import Parser.Parser (parseSourceString)
-import qualified Data.ByteString.Char8 as BS
 import Analysis.AnalysisTestUtils
 
 

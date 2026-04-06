@@ -73,4 +73,8 @@ testTransformSizeofStoredin32bits =
 testTransformHardCodedStructSizes :: Spec
 testTransformHardCodedStructSizes =
   describe "transformHardCodedStructSizes" $ do
-    it "TODO: hard-coded struct size detection not yet exercised" pending
+    shouldLeaveUnresolved "leaves HardCodedStructSizes unresolved"
+      "void f() { void *p = malloc(16); }"
+      analyzeAlignmentIssues
+      transformAlignmentIssues
+      [HardCodedStructSizes]

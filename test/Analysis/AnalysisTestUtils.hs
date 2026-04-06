@@ -2,7 +2,6 @@ module Analysis.AnalysisTestUtils where
 
 import Test.Hspec
 import Data.List (sort, nub, (\\))
-import qualified Data.ByteString.Char8 as BS
 import Language.C.Syntax.AST
 import Parser.Parser (parseSourceString)
 import Analysis.IssueTypes

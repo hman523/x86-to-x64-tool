@@ -176,6 +176,7 @@ test-suite x86-to-x64-tool-test
         Analysis.AlignmentTests,
         Analysis.SerializationTests,
         Analysis.IntegrationTests,
+        Analysis.AnalysisTestUtils,
         Transformation.TransformationTests,
         Transformation.TransformationTestsUtils,
         Transformation.AlignmentTests,
@@ -188,7 +189,8 @@ test-suite x86-to-x64-tool-test
         Transformation.PlatformSpecificsTests,
         Transformation.PointerMathTests,
         Transformation.SerializationTests,
-        Transformation.TypeSizeTests
+        Transformation.TypeSizeTests,
+        Transformation.IntegrationTests
 
     -- Test dependencies.
     build-depends:

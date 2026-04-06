@@ -2,7 +2,6 @@ module Transformation.IntegrationTests where
 
 import Test.Hspec
 import X86_to_X64
-import Analysis.IssueTypes
 
 transformationIntegrationSpec :: Spec
 transformationIntegrationSpec = describe "Transformation Integration" $ do
