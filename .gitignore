@@ -37,3 +37,4 @@ cabal.project.local~
 .ionide
 
 *.x64.c
+.DS_Store
