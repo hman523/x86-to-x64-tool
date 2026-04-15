@@ -1,200 +1,200 @@
-module Transformation.FormatStringsTests where
+module Linter.FormatStringsTests where
 
 import Test.Hspec
-import Transformation.TransformationTestsUtils
-import Transformation.FormatStrings
+import Linter.LinterTestsUtils
+import Linter.FormatStrings
 import Analysis.FormatStrings
 
-formatStringsTransformSpec :: Spec
-formatStringsTransformSpec = describe "FormatStrings Transformations" $ do
-  testTransformDUsedWithSizet
-  testTransformUUsedWithSizet
-  testTransformXUsedWithSizet
-  testTransformDUsedWithPtrdifft
-  testTransformUUsedWithPtrdifft
-  testTransformDUsedWithPtr
-  testTransformUUsedWithPtr
-  testTransformXUsedWithPtr
-  testTransformLuUsedForPtrSizedVals
-  testTransformLdUsedWithLongAssuming64bits
+formatStringsLintSpec :: Spec
+formatStringsLintSpec = describe "FormatStrings Linting" $ do
+  testLintDUsedWithSizet
+  testLintUUsedWithSizet
+  testLintXUsedWithSizet
+  testLintDUsedWithPtrdifft
+  testLintUUsedWithPtrdifft
+  testLintDUsedWithPtr
+  testLintUUsedWithPtr
+  testLintXUsedWithPtr
+  testLintLuUsedForPtrSizedVals
+  testLintLdUsedWithLongAssuming64bits
   testFormatStringsIntegration
 
-testTransformDUsedWithSizet :: Spec
-testTransformDUsedWithSizet =
-  describe "transformDUsedWithSizet" $ do
+testLintDUsedWithSizet :: Spec
+testLintDUsedWithSizet =
+  describe "lintDUsedWithSizet" $ do
     shouldResolveIssue
       "resolves %d with size_t arg by changing to %zd"
       "void foo() { unsigned long sz; printf(\"%d\", sz); }"
       checkdUsedWithSizet
-      transformDUsedWithSizet
-    shouldTransformTo
-      "output contains %zd after transformation"
+      lintDUsedWithSizet
+    shouldLintTo
+      "output contains %zd after linting"
       "void foo() { unsigned long sz; printf(\"%d\", sz); }"
       checkdUsedWithSizet
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%zd"
     shouldResolveIssue
       "resolves %d with size_t when flags and width present (e.g. %-10d)"
       "void foo() { unsigned long sz; printf(\"%-10d\", sz); }"
       checkdUsedWithSizet
-      transformDUsedWithSizet
+      lintDUsedWithSizet
 
-testTransformUUsedWithSizet :: Spec
-testTransformUUsedWithSizet =
-  describe "transformUUsedWithSizet" $ do
+testLintUUsedWithSizet :: Spec
+testLintUUsedWithSizet =
+  describe "lintUUsedWithSizet" $ do
     shouldResolveIssue
       "resolves %u with size_t arg by changing to %zu"
       "void foo() { unsigned long sz; printf(\"%u\", sz); }"
       checkuUsedWithSizet
-      transformUUsedWithSizet
-    shouldTransformTo
-      "output contains %zu after transformation"
+      lintUUsedWithSizet
+    shouldLintTo
+      "output contains %zu after linting"
       "void foo() { unsigned long sz; printf(\"%u\", sz); }"
       checkuUsedWithSizet
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%zu"
 
-testTransformXUsedWithSizet :: Spec
-testTransformXUsedWithSizet =
-  describe "transformXUsedWithSizet" $ do
+testLintXUsedWithSizet :: Spec
+testLintXUsedWithSizet =
+  describe "lintXUsedWithSizet" $ do
     shouldResolveIssue
       "resolves %x with size_t arg by changing to %zx"
       "void foo() { unsigned long sz; printf(\"%x\", sz); }"
       checkxUsedWithSizet
-      transformXUsedWithSizet
-    shouldTransformTo
-      "output contains %zx after transformation"
+      lintXUsedWithSizet
+    shouldLintTo
+      "output contains %zx after linting"
       "void foo() { unsigned long sz; printf(\"%x\", sz); }"
       checkxUsedWithSizet
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%zx"
 
-testTransformDUsedWithPtrdifft :: Spec
-testTransformDUsedWithPtrdifft =
-  describe "transformDUsedWithPtrdifft" $ do
+testLintDUsedWithPtrdifft :: Spec
+testLintDUsedWithPtrdifft =
+  describe "lintDUsedWithPtrdifft" $ do
     shouldResolveIssue
       "resolves %d with ptrdiff_t arg by changing to %td"
       "void foo() { long n; printf(\"%d\", n); }"
       checkdUsedWithPtrdifft
-      transformDUsedWithPtrdifft
-    shouldTransformTo
-      "output contains %td after transformation"
+      lintDUsedWithPtrdifft
+    shouldLintTo
+      "output contains %td after linting"
       "void foo() { long n; printf(\"%d\", n); }"
       checkdUsedWithPtrdifft
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%td"
 
-testTransformUUsedWithPtrdifft :: Spec
-testTransformUUsedWithPtrdifft =
-  describe "transformUUsedWithPtrdifft" $ do
+testLintUUsedWithPtrdifft :: Spec
+testLintUUsedWithPtrdifft =
+  describe "lintUUsedWithPtrdifft" $ do
     shouldResolveIssue
       "resolves %u with ptrdiff_t arg by changing to %tu"
       "void foo() { long n; printf(\"%u\", n); }"
       checkuUsedWithPtrdifft
-      transformUUsedWithPtrdifft
-    shouldTransformTo
-      "output contains %tu after transformation"
+      lintUUsedWithPtrdifft
+    shouldLintTo
+      "output contains %tu after linting"
       "void foo() { long n; printf(\"%u\", n); }"
       checkuUsedWithPtrdifft
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%tu"
 
-testTransformDUsedWithPtr :: Spec
-testTransformDUsedWithPtr =
-  describe "transformDUsedWithPtr" $ do
+testLintDUsedWithPtr :: Spec
+testLintDUsedWithPtr =
+  describe "lintDUsedWithPtr" $ do
     shouldResolveIssue
       "resolves %d with pointer arg by changing to %p"
       "void foo() { int *p; printf(\"%d\", p); }"
       checkdUsedWithPtr
-      transformDUsedWithPtr
-    shouldTransformTo
-      "output contains %p after transformation"
+      lintDUsedWithPtr
+    shouldLintTo
+      "output contains %p after linting"
       "void foo() { int *p; printf(\"%d\", p); }"
       checkdUsedWithPtr
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%p"
 
-testTransformUUsedWithPtr :: Spec
-testTransformUUsedWithPtr =
-  describe "transformUUsedWithPtr" $ do
+testLintUUsedWithPtr :: Spec
+testLintUUsedWithPtr =
+  describe "lintUUsedWithPtr" $ do
     shouldResolveIssue
       "resolves %u with pointer arg by changing to %p"
       "void foo() { int *p; printf(\"%u\", p); }"
       checkuUsedWithPtr
-      transformUUsedWithPtr
-    shouldTransformTo
-      "output contains %p after transformation"
+      lintUUsedWithPtr
+    shouldLintTo
+      "output contains %p after linting"
       "void foo() { int *p; printf(\"%u\", p); }"
       checkuUsedWithPtr
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%p"
 
-testTransformXUsedWithPtr :: Spec
-testTransformXUsedWithPtr =
-  describe "transformXUsedWithPtr" $ do
+testLintXUsedWithPtr :: Spec
+testLintXUsedWithPtr =
+  describe "lintXUsedWithPtr" $ do
     shouldResolveIssue
       "resolves %x with pointer arg by changing to %p"
       "void foo() { int *p; printf(\"%x\", p); }"
       checkxUsedWithPtr
-      transformXUsedWithPtr
-    shouldTransformTo
-      "output contains %p after transformation"
+      lintXUsedWithPtr
+    shouldLintTo
+      "output contains %p after linting"
       "void foo() { int *p; printf(\"%x\", p); }"
       checkxUsedWithPtr
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%p"
 
-testTransformLuUsedForPtrSizedVals :: Spec
-testTransformLuUsedForPtrSizedVals =
-  describe "transformLuUsedForPtrSizedVals" $ do
+testLintLuUsedForPtrSizedVals :: Spec
+testLintLuUsedForPtrSizedVals =
+  describe "lintLuUsedForPtrSizedVals" $ do
     shouldResolveIssue
       "resolves %lu with pointer arg by changing to %zu"
       "void foo() { int *p; printf(\"%lu\", p); }"
       checkluUsedForPtrSizedVals
-      transformLuUsedForPtrSizedVals
-    shouldTransformTo
-      "output contains %zu after transformation"
+      lintLuUsedForPtrSizedVals
+    shouldLintTo
+      "output contains %zu after linting"
       "void foo() { int *p; printf(\"%lu\", p); }"
       checkluUsedForPtrSizedVals
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%zu"
 
-testTransformLdUsedWithLongAssuming64bits :: Spec
-testTransformLdUsedWithLongAssuming64bits =
-  describe "transformLdUsedWithLongAssuming64bits" $ do
+testLintLdUsedWithLongAssuming64bits :: Spec
+testLintLdUsedWithLongAssuming64bits =
+  describe "lintLdUsedWithLongAssuming64bits" $ do
     shouldResolveIssue
       "resolves %ld with long arg by changing to %td"
       "void foo() { long n; printf(\"%ld\", n); }"
       checkldUsedWithLongAssuming64bits
-      transformLdUsedWithLongAssuming64bits
-    shouldTransformTo
-      "output contains %td after transformation"
+      lintLdUsedWithLongAssuming64bits
+    shouldLintTo
+      "output contains %td after linting"
       "void foo() { long n; printf(\"%ld\", n); }"
       checkldUsedWithLongAssuming64bits
-      transformFormatStringsIssues
+      lintFormatStringsIssues
       "%td"
 
 testFormatStringsIntegration :: Spec
 testFormatStringsIntegration =
   describe "integration" $ do
-    shouldFullyTransform
+    shouldFullyLint
       "resolves all four distinct issues in a single printf call"
       "void foo() { int *p; long n; printf(\"%d %x %u %ld\", p, p, p, n); }"
       analyzeFormatStringIssues
-      transformFormatStringsIssues
-    shouldFullyTransform
+      lintFormatStringsIssues
+    shouldFullyLint
       "resolves one issue per call across two separate printf calls"
       "void foo() { int *p; int *q; printf(\"%d\", p); printf(\"%x\", q); }"
       analyzeFormatStringIssues
-      transformFormatStringsIssues
-    shouldFullyTransform
+      lintFormatStringsIssues
+    shouldFullyLint
       "resolves pointer and size_t issues in separate calls"
       "void foo() { int *p; unsigned long sz; printf(\"%d\", p); printf(\"%d\", sz); }"
       analyzeFormatStringIssues
-      transformFormatStringsIssues
-    shouldFullyTransform
+      lintFormatStringsIssues
+    shouldFullyLint
       "resolves all ten distinct issues in a single printf call"
       "void foo() { unsigned long sz; long n; int *p; printf(\"%d %u %x %d %u %d %u %x %lu %ld\", sz, sz, sz, n, n, p, p, p, p, n); }"
       analyzeFormatStringIssues
-      transformFormatStringsIssues
+      lintFormatStringsIssues
 

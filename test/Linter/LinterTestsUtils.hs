@@ -1,4 +1,4 @@
-module Transformation.TransformationTestsUtils where
+module Linter.LinterTestsUtils where
 
 import Test.Hspec
 import Data.List (sort)
@@ -10,26 +10,26 @@ import Parser.Parser (parseSourceString)
 import Analysis.IssueTypes
 
 -- | Parse source, run the analyser to obtain issues, run the module-level
--- transformer, assert no issues remain unresolved, and re-run the analyser
--- on the transformed AST to verify the issues are gone at the semantic level.
-shouldFullyTransform
+-- linter, assert no issues remain unresolved, and re-run the analyser
+-- on the linted AST to verify the issues are gone at the semantic level.
+shouldFullyLint
   :: String
   -> String
   -> (CTranslUnit -> [Issue])
   -> (CTranslUnit -> [Issue] -> (CTranslUnit, [Issue]))
   -> Spec
-shouldFullyTransform name code analyser transformer =
+shouldFullyLint name code analyser linter =
   it name $ do
     case parseSourceString code of
       Left err  -> fail (show err)
       Right ast -> do
         let issues = analyser ast
         length issues `shouldSatisfy` (> 0)
-        let (ast', unresolved) = transformer ast issues
+        let (ast', unresolved) = linter ast issues
         unresolved `shouldSatisfy` null
         analyser ast' `shouldSatisfy` null
 
--- | Like 'shouldFullyTransform' but calls a per-issue transformer on the
+-- | Like 'shouldFullyLint' but calls a per-issue linter on the
 -- first flagged issue rather than the module-level dispatcher.
 shouldResolveIssue
   :: String
@@ -37,36 +37,36 @@ shouldResolveIssue
   -> (CTranslUnit -> [Issue])
   -> (CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue))
   -> Spec
-shouldResolveIssue name code analyser transformer =
+shouldResolveIssue name code analyser linter =
   it name $ do
     case parseSourceString code of
       Left err  -> fail (show err)
       Right ast -> do
         let issues = analyser ast
         length issues `shouldSatisfy` (> 0)
-        let (ast', mi) = transformer ast (head issues)
+        let (ast', mi) = linter ast (head issues)
         mi `shouldSatisfy` isNothing
         analyser ast' `shouldSatisfy` null
 
--- | Parse source, run the analyser, run the transformer, and assert the
+-- | Parse source, run the analyser, run the linter, and assert the
 -- pretty-printed output contains the expected substring.
-shouldTransformTo
+shouldLintTo
   :: String
   -> String
   -> (CTranslUnit -> [Issue])
   -> (CTranslUnit -> [Issue] -> (CTranslUnit, [Issue]))
   -> String                                             -- ^ expected substring
   -> Spec
-shouldTransformTo name code analyser transformer expected =
+shouldLintTo name code analyser linter expected =
   it name $ do
     case parseSourceString code of
       Left err  -> fail (show err)
       Right ast -> do
         let issues = analyser ast
-        let (ast', _) = transformer ast issues
+        let (ast', _) = linter ast issues
         render (pretty ast') `shouldContain` expected
 
--- | Assert that the transformer leaves exactly the listed tags unresolved
+-- | Assert that the linter leaves exactly the listed tags unresolved
 -- (order-insensitive).
 shouldLeaveUnresolved
   :: String
@@ -75,13 +75,13 @@ shouldLeaveUnresolved
   -> (CTranslUnit -> [Issue] -> (CTranslUnit, [Issue]))
   -> [IssueTag]
   -> Spec
-shouldLeaveUnresolved name code analyser transformer expectedTags =
+shouldLeaveUnresolved name code analyser linter expectedTags =
   it name $ do
     case parseSourceString code of
       Left err  -> fail (show err)
       Right ast -> do
         let issues = analyser ast
-        let (_, unresolved) = transformer ast issues
+        let (_, unresolved) = linter ast issues
         sort (map (show . issueType) unresolved)
           `shouldBe` sort (map show expectedTags)
 

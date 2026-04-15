@@ -1,17 +1,17 @@
 # x86-to-x64-tool
 
-A static analysis and automated transformation tool for C source code that identifies and fixes portability issues encountered when migrating from 32-bit (x86) to 64-bit (x64) architectures.
+A static analysis and automated linting tool for C source code that identifies and fixes portability issues encountered when migrating from 32-bit (x86) to 64-bit (x64) architectures.
 
 ## Overview
 
-When porting C programs from 32-bit to 64-bit platforms, several categories of bugs become possible: pointer sizes change from 4 bytes to 8 bytes, type assumptions break, and platform-specific code may no longer compile or behave correctly. This tool parses C source files, detects those issues, and where possible applies automated transformations to fix them.
+When porting C programs from 32-bit to 64-bit platforms, several categories of bugs become possible: pointer sizes change from 4 bytes to 8 bytes, type assumptions break, and platform-specific code may no longer compile or behave correctly. This tool parses C source files, detects those issues, and where possible applies automated linting to fix them.
 
 The tool is implemented in Haskell and uses the `language-c` library for parsing.
 
 ## Features
 
 - **Analysis mode**: parse a C file and report all detected portability issues with file and line information
-- **Transform mode**: apply automated fixes and write the result to a new file, reporting any issues that could not be resolved automatically
+- **Lint mode**: apply automated fixes and write the result to a new file, reporting any issues that could not be resolved automatically
 - **Haskell library API** for use from other Haskell programs
 
 ### Issue Categories Detected
@@ -60,8 +60,8 @@ Usage: x86-to-x64-tool <file.c> [options]
 
 Options:
   -v           Verbose: print a one-sentence explanation for each issue
-  -t           Transform: apply automated x86-to-x64 transformations
-  -o <file>    Write transformed source to this file (default: <input>.x64.c)
+  -t           Lint: apply automated x86-to-x64 fixes
+  -o <file>    Write linted source to this file (default: <input>.x64.c)
   --no-color   Disable colored output
   -h, --help   Show this help message
 ```
@@ -80,13 +80,13 @@ Analyze with explanations for each issue:
 x86-to-x64-tool myprogram.c -v
 ```
 
-Apply automated transformations and write the result to `myprogram.x64.c`:
+Apply automated linting and write the result to `myprogram.x64.c`:
 
 ```
 x86-to-x64-tool myprogram.c -t
 ```
 
-Transform and write the output to a specific file:
+Lint and write the output to a specific file:
 
 ```
 x86-to-x64-tool myprogram.c -t -o fixed.c
@@ -100,13 +100,13 @@ The tool is also available as a Haskell library. The main entry points are in `X
 -- Analyze a file; returns Left on parse error, Right issues on success
 analyzeFile :: FilePath -> IO (Either String [Issue])
 
--- Transform a file; returns Left on parse error,
--- Right (transformedSource, unresolvedIssues) on success
-transformFile :: FilePath -> IO (Either String (String, [Issue]))
+-- Lint a file; returns Left on parse error,
+-- Right (lintedSource, unresolvedIssues) on success
+lintFile :: FilePath -> IO (Either String (String, [Issue]))
 
 -- Same operations on an in-memory String
-analyzeSource  :: String -> Either String [Issue]
-transformSource :: String -> Either String (String, [Issue])
+analyzeSource :: String -> Either String [Issue]
+lintSource :: String -> Either String (String, [Issue])
 ```
 
 ## Running Tests
@@ -138,9 +138,9 @@ src/
     PointerMath.hs       -- Pointer arithmetic checks
     Serialization.hs     -- Serialization checks
     TypeSize.hs          -- Type size checks
-  Transformation/
-    Transformation.hs    -- Top-level transformation pass
-    Helpers.hs           -- Shared transformation utilities
+  Linter/
+    Linter.hs            -- Top-level linting pass
+    Helpers.hs           -- Shared linting utilities
     Alignment.hs         -- Alignment fixes
     BitManipulation.hs   -- Bit manipulation fixes
     Comparison.hs        -- Comparison fixes

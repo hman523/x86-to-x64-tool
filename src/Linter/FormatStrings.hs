@@ -1,4 +1,4 @@
-module Transformation.FormatStrings where
+module Linter.FormatStrings where
 
 import Data.Generics (everywhere, mkT)
 import Language.C.Syntax.AST
@@ -13,71 +13,71 @@ import Analysis.FormatStrings (fmtArgIndex)
 -- Module-level dispatcher
 -- ---------------------------------------------------------------------------
 
-transformFormatStringsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-transformFormatStringsIssues ast issues = foldl applyOne (ast, []) issues
+lintFormatStringsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
+lintFormatStringsIssues ast issues = foldl applyOne (ast, []) issues
   where
     applyOne (a, unresolved) issue =
       let (a', mi) = dispatch a issue
       in (a', maybe unresolved (: unresolved) mi)
 
     dispatch a issue = case issueType issue of
-      DUsedWithSizet               -> transformDUsedWithSizet               a issue
-      UUsedWithSizet               -> transformUUsedWithSizet               a issue
-      XUsedWithSizet               -> transformXUsedWithSizet               a issue
-      DUsedWithPtrdifft            -> transformDUsedWithPtrdifft            a issue
-      UUsedWithPtrdifft            -> transformUUsedWithPtrdifft            a issue
-      DUsedWithPtr                 -> transformDUsedWithPtr                 a issue
-      UUsedWithPtr                 -> transformUUsedWithPtr                 a issue
-      XUsedWithPtr                 -> transformXUsedWithPtr                 a issue
-      LuUsedForPtrSizedVals        -> transformLuUsedForPtrSizedVals        a issue
-      LdUsedWithLongAssuming64bits -> transformLdUsedWithLongAssuming64bits a issue
+      DUsedWithSizet               -> lintDUsedWithSizet               a issue
+      UUsedWithSizet               -> lintUUsedWithSizet               a issue
+      XUsedWithSizet               -> lintXUsedWithSizet               a issue
+      DUsedWithPtrdifft            -> lintDUsedWithPtrdifft            a issue
+      UUsedWithPtrdifft            -> lintUUsedWithPtrdifft            a issue
+      DUsedWithPtr                 -> lintDUsedWithPtr                 a issue
+      UUsedWithPtr                 -> lintUUsedWithPtr                 a issue
+      XUsedWithPtr                 -> lintXUsedWithPtr                 a issue
+      LuUsedForPtrSizedVals        -> lintLuUsedForPtrSizedVals        a issue
+      LdUsedWithLongAssuming64bits -> lintLdUsedWithLongAssuming64bits a issue
       _                            -> (a, Just issue)
 
 -- ---------------------------------------------------------------------------
--- Per-tag transformers
+-- Per-tag linters
 -- (old length-modifier, old conv) -> (new length-modifier, new conv)
 -- ---------------------------------------------------------------------------
 
-transformDUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformDUsedWithSizet ast issue =
+lintDUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintDUsedWithSizet ast issue =
     (fixFmtSpec (issuePos issue) ("", 'd') ("z", 'd') ast, Nothing)
 
-transformUUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUUsedWithSizet ast issue =
+lintUUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintUUsedWithSizet ast issue =
     (fixFmtSpec (issuePos issue) ("", 'u') ("z", 'u') ast, Nothing)
 
-transformXUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformXUsedWithSizet ast issue =
+lintXUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintXUsedWithSizet ast issue =
     (fixFmtSpec (issuePos issue) ("", 'x') ("z", 'x') ast, Nothing)
 
-transformDUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformDUsedWithPtrdifft ast issue =
+lintDUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintDUsedWithPtrdifft ast issue =
     (fixFmtSpec (issuePos issue) ("", 'd') ("t", 'd') ast, Nothing)
 
-transformUUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUUsedWithPtrdifft ast issue =
+lintUUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintUUsedWithPtrdifft ast issue =
     (fixFmtSpec (issuePos issue) ("", 'u') ("t", 'u') ast, Nothing)
 
 -- Pointers should use %p; length modifier is dropped, conv changes to 'p'
-transformDUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformDUsedWithPtr ast issue =
+lintDUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintDUsedWithPtr ast issue =
     (fixFmtSpec (issuePos issue) ("", 'd') ("", 'p') ast, Nothing)
 
-transformUUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUUsedWithPtr ast issue =
+lintUUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintUUsedWithPtr ast issue =
     (fixFmtSpec (issuePos issue) ("", 'u') ("", 'p') ast, Nothing)
 
-transformXUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformXUsedWithPtr ast issue =
+lintXUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintXUsedWithPtr ast issue =
     (fixFmtSpec (issuePos issue) ("", 'x') ("", 'p') ast, Nothing)
 
-transformLuUsedForPtrSizedVals :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformLuUsedForPtrSizedVals ast issue =
+lintLuUsedForPtrSizedVals :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintLuUsedForPtrSizedVals ast issue =
     (fixFmtSpec (issuePos issue) ("l", 'u') ("z", 'u') ast, Nothing)
 
 -- %ld assumes long is 64-bit; portable replacement is %td (ptrdiff_t)
-transformLdUsedWithLongAssuming64bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformLdUsedWithLongAssuming64bits ast issue =
+lintLdUsedWithLongAssuming64bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintLdUsedWithLongAssuming64bits ast issue =
     (fixFmtSpec (issuePos issue) ("l", 'd') ("t", 'd') ast, Nothing)
 
 -- ---------------------------------------------------------------------------

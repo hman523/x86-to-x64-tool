@@ -3,15 +3,15 @@
 -- Typical usage:
 --
 --   analyzeFile "foo.c"           -- returns the list of issues found
---   transformFile "foo.c"         -- returns (transformed source, unresolved issues)
+--   lintFile "foo.c"         -- returns (linted source, unresolved issues)
 --   analyzeSource "int main(){…}" -- work directly from a string
 module X86_to_X64
     ( -- * File-based entry points
       analyzeFile
-    , transformFile
+    , lintFile
       -- * String-based entry points
     , analyzeSource
-    , transformSource
+    , lintSource
       -- * Re-exports useful to callers
     , Issue(..)
     , IssueTag(..)
@@ -25,7 +25,7 @@ import Text.PrettyPrint      (render)
 import Parser.Parser         (parseSourceFile, parseSourceString)
 import Analysis.Analysis     (analysis)
 import Analysis.IssueTypes    (Issue(..), IssueTag(..), Severity(..), prettyPrintIssues)
-import Transformation.Transformation (transformation)
+import Linter.Linter (lint)
 
 -- ---------------------------------------------------------------------------
 -- File-based entry points
@@ -40,17 +40,17 @@ analyzeFile path = do
         Left err  -> Left (show err)
         Right ast -> Right (analysis ast)
 
--- | Parse, analyse, and transform a C source file.
+-- | Parse, analyse, and lint a C source file.
 --   Returns @Left errMsg@ on a parse failure, otherwise
---   @Right (transformedSource, unresolvedIssues)@.
-transformFile :: FilePath -> IO (Either String (String, [Issue]))
-transformFile path = do
+--   @Right (lintedSource, unresolvedIssues)@.
+lintFile :: FilePath -> IO (Either String (String, [Issue]))
+lintFile path = do
     result <- parseSourceFile path
     return $ case result of
         Left err  -> Left (show err)
         Right ast ->
             let issues              = analysis ast
-                (ast', unresolved)  = transformation ast issues
+                (ast', unresolved)  = lint ast issues
             in Right (render (pretty ast'), unresolved)
 
 -- ---------------------------------------------------------------------------
@@ -64,13 +64,13 @@ analyzeSource src = case parseSourceString src of
     Left err  -> Left (show err)
     Right ast -> Right (analysis ast)
 
--- | Analyse and transform C source code supplied as a 'String'.
+-- | Analyse and lint C source code supplied as a 'String'.
 --   Returns @Left errMsg@ on a parse failure, otherwise
---   @Right (transformedSource, unresolvedIssues)@.
-transformSource :: String -> Either String (String, [Issue])
-transformSource src = case parseSourceString src of
+--   @Right (lintedSource, unresolvedIssues)@.
+lintSource :: String -> Either String (String, [Issue])
+lintSource src = case parseSourceString src of
     Left err  -> Left (show err)
     Right ast ->
         let issues             = analysis ast
-            (ast', unresolved) = transformation ast issues
+            (ast', unresolved) = lint ast issues
         in Right (render (pretty ast'), unresolved)

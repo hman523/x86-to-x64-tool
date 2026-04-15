@@ -5,7 +5,7 @@ import System.Exit        (exitFailure)
 import System.IO          (hPutStrLn, hIsTerminalDevice, stderr, stdout)
 import Text.Read          (readMaybe)
 
-import X86_to_X64         (analyzeFile, transformFile, prettyPrintIssues)
+import X86_to_X64         (analyzeFile, lintFile, prettyPrintIssues)
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -15,7 +15,7 @@ data Config = Config
     { cfgInputFile  :: FilePath
     , cfgOutputFile :: Maybe FilePath
     , cfgVerbose    :: Bool
-    , cfgTransform  :: Bool
+    , cfgLint  :: Bool
     , cfgNoColor    :: Bool
     } deriving (Show)
 
@@ -24,7 +24,7 @@ defaultConfig = Config
     { cfgInputFile  = ""
     , cfgOutputFile = Nothing
     , cfgVerbose    = False
-    , cfgTransform  = False
+    , cfgLint  = False
     , cfgNoColor    = False
     }
 
@@ -43,7 +43,7 @@ parseArgs args = go args defaultConfig
     go ("-h":_)          _   = Left ""
     go ("--help":_)      _   = Left ""
     go ("-v":rest)         cfg = go rest cfg { cfgVerbose   = True  }
-    go ("-t":rest)         cfg = go rest cfg { cfgTransform = True  }
+    go ("-l":rest)         cfg = go rest cfg { cfgLint = True  }
     go ("--no-color":rest) cfg = go rest cfg { cfgNoColor   = True  }
     go ("-o":path:rest)  cfg = go rest cfg { cfgOutputFile = Just path }
     go ("-o":[])         _   = Left "-o requires an output file path argument."
@@ -57,8 +57,8 @@ usageMessage = unlines
     , ""
     , "Options:"
     , "  -v           Verbose: print a one-sentence explanation for each issue"
-    , "  -t           Transform: apply automated x86-to-x64 transformations"
-    , "  -o <file>    Write transformed source to this file (default: <input>.x64.c)"
+    , "  -l           Lint: apply automated x86-to-x64 fixes"
+    , "  -o <file>    Write linted source to this file (default: <input>.x64.c)"
     , "  --no-color   Disable colored output"
     , "  -h, --help   Show this help message"
     ]
@@ -94,9 +94,9 @@ run cfg = do
     isTTY     <- hIsTerminalDevice stdout
     termWidth <- getTermWidth
     let useColor = isTTY && not (cfgNoColor cfg)
-    if cfgTransform cfg
+    if cfgLint cfg
         then do
-            result <- transformFile (cfgInputFile cfg)
+            result <- lintFile (cfgInputFile cfg)
             case result of
                 Left err -> hPutStrLn stderr ("Parse error: " ++ err) >> exitFailure
                 Right (src, unresolved) -> do
@@ -104,7 +104,7 @@ run cfg = do
                                       Just p  -> p
                                       Nothing -> cfgInputFile cfg ++ ".x64.c"
                     writeFile outPath src
-                    putStrLn ("Transformed output written to: " ++ outPath)
+                    putStrLn ("Linted output written to: " ++ outPath)
                     if null unresolved
                         then putStrLn "All issues resolved."
                         else do

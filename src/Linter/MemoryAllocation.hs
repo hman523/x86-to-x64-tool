@@ -1,20 +1,20 @@
-module Transformation.MemoryAllocation where
+module Linter.MemoryAllocation where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
-import Transformation.Helpers
+import Linter.Helpers
 
-transformMemoryAllocationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-transformMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
+lintMemoryAllocationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
+lintMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
   where
     applyOne (a, unresolved) issue =
       let (a', mi) = dispatch a issue
       in (a', maybe unresolved (: unresolved) mi)
 
     dispatch a issue = case issueType issue of
-      AllocationSizeCalcsMayOverflow -> transformAllocationSizeCalcsMayOverflow a issue
-      MallocWithoutOverflowChecking  -> transformMallocWithoutOverflowChecking  a issue
-      UsingIntToStoreAllocationSizes -> transformUsingIntToStoreAllocationSizes a issue
+      AllocationSizeCalcsMayOverflow -> lintAllocationSizeCalcsMayOverflow a issue
+      MallocWithoutOverflowChecking  -> lintMallocWithoutOverflowChecking  a issue
+      UsingIntToStoreAllocationSizes -> lintUsingIntToStoreAllocationSizes a issue
       _                              -> (a, Just issue)
 
 -- Cannot be done automatically: malloc(n * m) where both operands are int can
@@ -22,18 +22,18 @@ transformMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
 -- operand, or adding an overflow check) each changes the program's API usage
 -- or control flow. Choosing the right approach requires understanding the
 -- programmer's intent and how the failure case should be handled.
-transformAllocationSizeCalcsMayOverflow :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformAllocationSizeCalcsMayOverflow = untransformable
+lintAllocationSizeCalcsMayOverflow :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintAllocationSizeCalcsMayOverflow = unlintable
 
 -- Cannot be done automatically: malloc(a + b) where both operands are int can
 -- wrap before reaching size_t width. The correct fix requires an explicit
 -- overflow guard, but the programmer must decide what to do on overflow
 -- (abort, return NULL, clamp, etc.), which is a policy decision the tool
 -- cannot make.
-transformMallocWithoutOverflowChecking :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformMallocWithoutOverflowChecking = untransformable
+lintMallocWithoutOverflowChecking :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintMallocWithoutOverflowChecking = unlintable
 
-transformUsingIntToStoreAllocationSizes :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-transformUsingIntToStoreAllocationSizes ast issue = case issueDeclPos issue of
+lintUsingIntToStoreAllocationSizes :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintUsingIntToStoreAllocationSizes ast issue = case issueDeclPos issue of
     Just ni -> (retypeDecl ni (typedefSpec "size_t") ast, Nothing)
     Nothing -> (ast, Just issue)

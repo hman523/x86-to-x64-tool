@@ -1,10 +1,10 @@
-module Transformation.IntegrationTests where
+module Linter.IntegrationTests where
 
 import Test.Hspec
 import X86_to_X64
 
-transformationIntegrationSpec :: Spec
-transformationIntegrationSpec = describe "Transformation Integration" $ do
+linterIntegrationSpec :: Spec
+linterIntegrationSpec = describe "Linter Integration" $ do
 
   -- -------------------------------------------------------------------
   -- analyzeFile
@@ -40,38 +40,38 @@ transformationIntegrationSpec = describe "Transformation Integration" $ do
       result `shouldSatisfy` hasTag StructsWithMixedPtrNonPtrMembers
 
   -- -------------------------------------------------------------------
-  -- transformFile
+  -- lintFile
   -- -------------------------------------------------------------------
-  describe "transformFile" $ do
+  describe "lintFile" $ do
 
     it "returns Left for a file that fails to parse" $ do
-      result <- transformFile "test/c_progs/invalid.c"
+      result <- lintFile "test/c_progs/invalid.c"
       result `shouldSatisfy` isLeft
 
     it "returns Right for a file with portability issues" $ do
-      result <- transformFile "test/c_progs/ptr_issues.c"
+      result <- lintFile "test/c_progs/ptr_issues.c"
       result `shouldSatisfy` isRightPair
 
-    it "transformed source contains intptr_t after cast rewrite" $ do
-      result <- transformFile "test/c_progs/ptr_issues.c"
+    it "linted source contains intptr_t after cast rewrite" $ do
+      result <- lintFile "test/c_progs/ptr_issues.c"
       case result of
         Left err       -> fail err
         Right (src, _) -> src `shouldContain` "intptr_t"
 
-    it "transformed source contains ptrdiff_t after ptr-diff variable rewrite" $ do
-      result <- transformFile "test/c_progs/ptr_issues.c"
+    it "linted source contains ptrdiff_t after ptr-diff variable rewrite" $ do
+      result <- lintFile "test/c_progs/ptr_issues.c"
       case result of
         Left err       -> fail err
         Right (src, _) -> src `shouldContain` "ptrdiff_t"
 
-    it "transformed source contains size_t after sizeof-to-int rewrite" $ do
-      result <- transformFile "test/c_progs/ptr_issues.c"
+    it "linted source contains size_t after sizeof-to-int rewrite" $ do
+      result <- lintFile "test/c_progs/ptr_issues.c"
       case result of
         Left err       -> fail err
         Right (src, _) -> src `shouldContain` "size_t"
 
     it "leaves StructsWithMixedPtrNonPtrMembers unresolved" $ do
-      result <- transformFile "test/c_progs/ptr_issues.c"
+      result <- lintFile "test/c_progs/ptr_issues.c"
       case result of
         Left err              -> fail err
         Right (_, unresolved) ->
@@ -93,25 +93,25 @@ transformationIntegrationSpec = describe "Transformation Integration" $ do
         `shouldSatisfy` isRightNonEmpty
 
   -- -------------------------------------------------------------------
-  -- transformSource
+  -- lintSource
   -- -------------------------------------------------------------------
-  describe "transformSource" $ do
+  describe "lintSource" $ do
 
     it "returns Left on unparseable input" $
-      transformSource "int;" `shouldSatisfy` isLeft
+      lintSource "int;" `shouldSatisfy` isLeft
 
     it "rewrites (int)ptr cast to (intptr_t)ptr" $
-      case transformSource "int f(void) { int *p = 0; int x = (int)p; return x; }" of
+      case lintSource "int f(void) { int *p = 0; int x = (int)p; return x; }" of
         Left err       -> expectationFailure err
         Right (src, _) -> src `shouldContain` "intptr_t"
 
     it "rewrites int variable holding ptrdiff to ptrdiff_t" $
-      case transformSource "void f(void) { int *p = 0; int *q = 0; int d; d = p - q; }" of
+      case lintSource "void f(void) { int *p = 0; int *q = 0; int d; d = p - q; }" of
         Left err       -> expectationFailure err
         Right (src, _) -> src `shouldContain` "ptrdiff_t"
 
     it "returns unresolvable issues in the unresolved list" $
-      case transformSource "struct S { int *p; int x; }; void f(void) { }" of
+      case lintSource "struct S { int *p; int x; }; void f(void) { }" of
         Left err              -> expectationFailure err
         Right (_, unresolved) ->
           map issueType unresolved `shouldSatisfy` (StructsWithMixedPtrNonPtrMembers `elem`)
@@ -121,9 +121,9 @@ transformationIntegrationSpec = describe "Transformation Integration" $ do
   -- -------------------------------------------------------------------
   describe "everything at once" $ do
 
-    result <- runIO $ transformFile "test/c_progs/everything_at_once.c"
+    result <- runIO $ lintFile "test/c_progs/everything_at_once.c"
 
-    it "transforms everything_at_once.c without error" $
+    it "lints everything_at_once.c without error" $
       result `shouldSatisfy` isRightPair
 
     -- TypeSize: cast rewrites -----------------------------------------
@@ -273,7 +273,7 @@ transformationIntegrationSpec = describe "Transformation Integration" $ do
         Right (_, unresolved) ->
           map issueType unresolved `shouldSatisfy` (PtrInSharedMemory `elem`)
 
-    it "at least 20 issues remain unresolved after transformation" $
+    it "at least 20 issues remain unresolved after linting" $
       case result of
         Left err              -> fail err
         Right (_, unresolved) -> length unresolved `shouldSatisfy` (>= 20)
