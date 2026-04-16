@@ -80,3 +80,19 @@ platformSpecificsSpec = describe "PlatformSpecifics Analysis" $ do
             "void foo() { _mm_set1_ps(0); _mm256_setzero_ps(); }"
             checkx86SpecificCompilerIntrinsics
             2
+
+    describe "checkHandleTypesCastToInt" $ do
+        shouldFlagError
+            "flags HANDLE cast to int"
+            "typedef void* HANDLE; void foo() { HANDLE h; int x = (int)h; }"
+            checkHandleTypesCastToInt
+
+        shouldFlagError
+            "flags HANDLE cast to unsigned int"
+            "typedef void* HANDLE; void foo() { HANDLE h; unsigned int x = (unsigned int)h; }"
+            checkHandleTypesCastToInt
+
+        shouldNotFlagError
+            "does not flag HANDLE cast to void* (correct fix direction)"
+            "typedef void* HANDLE; void foo() { HANDLE h; void *x = (void*)h; }"
+            checkHandleTypesCastToInt

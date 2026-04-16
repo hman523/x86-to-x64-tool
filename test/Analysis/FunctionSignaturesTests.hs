@@ -14,6 +14,11 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "int foo() { int *p; return p; }"
             checkFnsReturnPtrAsInt
 
+        shouldFlagError
+            "flags function returning unsigned int that returns a local pointer variable"
+            "unsigned int foo() { int *p; return p; }"
+            checkFnsReturnPtrAsInt
+
         shouldNotFlagError
             "does not flag function that legitimately returns int"
             "int foo() { int x = 42; return x; }"
@@ -41,6 +46,11 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "void foo(int handle) { int *p; handle = p; }"
             checkFnsParamDeclaredAsIntTakesPtr
 
+        shouldFlagError
+            "flags param declared as unsigned int receiving a pointer value"
+            "void foo(unsigned int handle) { int *p; handle = p; }"
+            checkFnsParamDeclaredAsIntTakesPtr
+
         shouldNotFlagError
             "does not flag int param receiving int value"
             "void foo(int x) { int y = 5; x = y; }"
@@ -50,6 +60,11 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
         shouldFlagError
             "flags va_arg extracting int (likely a pointer arg)"
             "void foo(int n, ...) { __builtin_va_list ap; int x = __builtin_va_arg(ap, int); }"
+            checkVaargUsingWrongTypesForPtrArgs
+
+        shouldFlagError
+            "flags va_arg extracting unsigned int (likely a pointer arg)"
+            "void foo(int n, ...) { __builtin_va_list ap; unsigned int x = __builtin_va_arg(ap, unsigned int); }"
             checkVaargUsingWrongTypesForPtrArgs
 
         shouldNotFlagError

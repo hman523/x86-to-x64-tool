@@ -41,9 +41,12 @@ data IssueTag
     | LdUsedWithLongAssuming64bits
     -- Function Signature Issues
     | FnsReturnPtrAsInt
+    | FnsReturnPtrAsUInt
     | FnsReturnPtrAsLong
     | FnsParamDeclaredAsIntTakesPtr
+    | FnsParamDeclaredAsUIntTakesPtr
     | VaargUsingWrongTypesForPtrArgs
+    | VaargUsingWrongTypesForPtrArgsUInt
     -- Memory Allocation Issues
     | AllocationSizeCalcsMayOverflow
     | MallocWithoutOverflowChecking
@@ -52,6 +55,7 @@ data IssueTag
     | InlineAsmWithx86Instructions
     | AsmBlocks
     | HandleTypesCastToInt
+    | HandleTypesCastToUInt
     | X86SpecificCompilerIntrinsics
     | AssumptionsAboutRegSizes
     -- Pointer Math Issues
@@ -141,9 +145,12 @@ getCategory tag = case tag of
     LdUsedWithLongAssuming64bits -> FormatStringsIssue
     -- Function Signature Issues
     FnsReturnPtrAsInt -> FunctionSignaturesIssue
+    FnsReturnPtrAsUInt -> FunctionSignaturesIssue
     FnsReturnPtrAsLong -> FunctionSignaturesIssue
     FnsParamDeclaredAsIntTakesPtr -> FunctionSignaturesIssue
+    FnsParamDeclaredAsUIntTakesPtr -> FunctionSignaturesIssue
     VaargUsingWrongTypesForPtrArgs -> FunctionSignaturesIssue
+    VaargUsingWrongTypesForPtrArgsUInt -> FunctionSignaturesIssue
     -- Memory Allocation Issues
     AllocationSizeCalcsMayOverflow -> MemoryAllocationIssue
     MallocWithoutOverflowChecking -> MemoryAllocationIssue
@@ -152,6 +159,7 @@ getCategory tag = case tag of
     InlineAsmWithx86Instructions -> PlatformSpecificsIssue
     AsmBlocks -> PlatformSpecificsIssue
     HandleTypesCastToInt -> PlatformSpecificsIssue
+    HandleTypesCastToUInt -> PlatformSpecificsIssue
     X86SpecificCompilerIntrinsics -> PlatformSpecificsIssue
     AssumptionsAboutRegSizes -> PlatformSpecificsIssue
     -- Pointer Math Issues
@@ -316,9 +324,12 @@ describeIssue tag = case tag of
     LdUsedWithLongAssuming64bits             -> "%ld assumes long is 64-bit, but on 64-bit Windows long is 32-bit; use PRId64 for portable 64-bit printing."
     -- Function Signatures
     FnsReturnPtrAsInt                        -> "Returning a pointer as a 32-bit int truncates the upper 32 bits of the address on 64-bit platforms."
+    FnsReturnPtrAsUInt                       -> "Returning a pointer as a 32-bit unsigned int truncates the upper 32 bits of the address on 64-bit platforms."
     FnsReturnPtrAsLong                       -> "Returning a pointer as long is not portable; long is 32 bits on Windows, so use intptr_t instead."
     FnsParamDeclaredAsIntTakesPtr            -> "Declaring a parameter as int but assigning a pointer to it truncates the upper 32 bits of the address on 64-bit platforms."
+    FnsParamDeclaredAsUIntTakesPtr           -> "Declaring a parameter as unsigned int but assigning a pointer to it truncates the upper 32 bits of the address on 64-bit platforms."
     VaargUsingWrongTypesForPtrArgs           -> "Extracting a pointer argument via va_arg as int silently truncates the 64-bit pointer address."
+    VaargUsingWrongTypesForPtrArgsUInt       -> "Extracting a pointer argument via va_arg as unsigned int silently truncates the 64-bit pointer address."
     -- Memory Allocation
     AllocationSizeCalcsMayOverflow    -> "Multiplying two 32-bit ints to compute an allocation size can overflow before the result is widened to size_t."
     MallocWithoutOverflowChecking            -> "Adding two 32-bit ints as a malloc size argument can overflow to a small value, causing an under-allocation."
@@ -327,6 +338,7 @@ describeIssue tag = case tag of
     InlineAsmWithx86Instructions             -> "Inline assembly using x86 register names (e.g., eax, ebx) will not compile or behave correctly on x86-64 or other architectures."
     AsmBlocks                                -> "Inline assembly blocks are architecture-specific and must be rewritten or conditionally compiled for x86-64."
     HandleTypesCastToInt                     -> "Windows HANDLE is a pointer-sized type; casting it to int truncates the upper 32 bits on 64-bit Windows."
+    HandleTypesCastToUInt                    -> "Windows HANDLE is a pointer-sized type; casting it to unsigned int truncates the upper 32 bits on 64-bit Windows."
     X86SpecificCompilerIntrinsics            -> "Compiler intrinsics with _mm_ prefixes are x86/SSE-specific and require porting or conditional compilation for other architectures."
     AssumptionsAboutRegSizes                 -> "Assuming sizeof(int) == 4 bakes in a platform-specific value that should be verified at compile time via a typedef or static_assert."
     -- Pointer Math

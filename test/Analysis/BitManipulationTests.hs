@@ -14,6 +14,11 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
             "void foo() { int *p; int flags; int packed = (int)(p | flags); }"
             checkPackingPtrsWithFlagsInInt
 
+        shouldFlagError
+            "flags cast to unsigned int of pointer OR'd with flags"
+            "void foo() { int *p; unsigned int flags; unsigned int packed = (unsigned int)(p | flags); }"
+            checkPackingPtrsWithFlagsInInt
+
         shouldNotFlagError
             "does not flag int | int cast to int"
             "void foo() { int a; int b; int c = (int)(a | b); }"
@@ -39,6 +44,11 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
         shouldFlagError
             "flags cast to int of right-shifted pointer"
             "void foo() { int *p; int bits = (int)(p >> 32); }"
+            checkExtractingPtrBitsIn32BitVar
+
+        shouldFlagError
+            "flags cast to unsigned int of right-shifted pointer"
+            "void foo() { int *p; unsigned int bits = (unsigned int)(p >> 32); }"
             checkExtractingPtrBitsIn32BitVar
 
         shouldNotFlagError

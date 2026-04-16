@@ -14,6 +14,11 @@ comparisonSpec = describe "Comparison Analysis" $ do
             "void foo() { int *start; int *end; for (int i = 0; i < (end - start); i++) { } }"
             checkLoopCounterAsIntWhenIteratingOverPtrArrays
 
+        shouldFlagError
+            "flags for-loop with unsigned int counter bounded by pointer subtraction"
+            "void foo() { int *start; int *end; for (unsigned int i = 0; i < (end - start); i++) { } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays
+
         shouldNotFlagError
             "does not flag for-loop with int counter bounded by simple int"
             "void foo() { int n; for (int i = 0; i < n; i++) { } }"
@@ -44,6 +49,11 @@ comparisonSpec = describe "Comparison Analysis" $ do
         shouldFlagError
             "flags fseek with int offset variable"
             "void foo() { int offset; fseek(0, offset, 0); }"
+            checkUsingIntForFileOffsets
+
+        shouldFlagError
+            "flags fseek with unsigned int offset variable"
+            "void foo() { unsigned int offset; fseek(0, offset, 0); }"
             checkUsingIntForFileOffsets
 
         shouldNotFlagError

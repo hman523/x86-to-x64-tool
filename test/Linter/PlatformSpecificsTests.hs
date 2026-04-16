@@ -11,6 +11,7 @@ platformSpecificsLintSpec = describe "PlatformSpecifics Linting" $ do
   testLintInlineAsmWithx86Instructions
   testLintAsmBlocks
   testLintHandleTypesCastToInt
+  testLintHandleTypesCastToUInt
   testLintX86SpecificCompilerIntrinsics
   testLintAssumptionsAboutRegSizes
 
@@ -40,6 +41,15 @@ testLintHandleTypesCastToInt =
       analyzePlatformSpecificIssues
       lintPlatformSpecificsIssues
       "intptr_t"
+
+testLintHandleTypesCastToUInt :: Spec
+testLintHandleTypesCastToUInt =
+  describe "lintHandleTypesCastToUInt" $ do
+    shouldLintTo "rewrites (unsigned int)HANDLE to (uintptr_t)HANDLE"
+      "typedef void* HANDLE; unsigned int f() { HANDLE h = 0; return (unsigned int)h; }"
+      analyzePlatformSpecificIssues
+      lintPlatformSpecificsIssues
+      "uintptr_t"
 
 testLintX86SpecificCompilerIntrinsics :: Spec
 testLintX86SpecificCompilerIntrinsics =

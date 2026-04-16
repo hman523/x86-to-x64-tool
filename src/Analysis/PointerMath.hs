@@ -30,7 +30,7 @@ checkPtrDiffStoredAs32bit ast@(CTranslUnit decls _) =
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                     rt = resolveTypedef tenv (typeOfExpr env r)
                 in [ createIssueWithDecl info mDeclPos Critical PtrDiffStoredAs32bit
-                   | isIntType' lhsType && isPointer lt && isPointer rt ]
+                   | (isIntType' lhsType || isUIntType lhsType) && isPointer lt && isPointer rt ]
             _ -> []
     checkExpr _ _ _ = []
 
@@ -44,7 +44,8 @@ checkPtrAddOverflow ast@(CTranslUnit decls _) =
         let lt = resolveTypedef tenv (typeOfExpr env l)
             rt = resolveTypedef tenv (typeOfExpr env r)
         in [ createIssue info Warning PointerAddOverflow
-           | (isPointer lt && isIntType' rt) || (isPointer rt && isIntType' lt) ]
+           | (isPointer lt && (isIntType' rt || isUIntType rt))
+             || (isPointer rt && (isIntType' lt || isUIntType lt)) ]
     checkExpr _ _ _ = []
 
 -- | Flag pointer subtraction with an unsigned int (can underflow).
@@ -72,5 +73,5 @@ checkArrayIndexingIntInArrayOver2tothe31size ast@(CTranslUnit decls _) =
                 CVar (Ident name _ _) _ -> lookupDeclPos env name
                 _                       -> Nothing
         in [ createIssueWithDecl info mDeclPos Warning ArrayIndexingIntInArrayOver2tothe31size
-           | isIntType' idxType ]
+           | isIntType' idxType || isUIntType idxType ]
     checkExpr _ _ _ = []

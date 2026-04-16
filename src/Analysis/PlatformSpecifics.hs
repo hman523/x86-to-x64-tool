@@ -77,9 +77,11 @@ checkHandleTypesCastToInt ast@(CTranslUnit decls _) =
     checkCast tenv env (CCast castDecl inner info) =
         let castTo    = resolveTypedef tenv (typeOfDecl castDecl)
             innerType = typeOfExpr env inner
-        in case (isIntType' castTo, innerType) of
-            (True, TTypedef name) | name `elem` handleTypes ->
-                [createIssue info Warning HandleTypesCastToInt]
+        in case innerType of
+            TTypedef name | name `elem` handleTypes ->
+                if isIntType' castTo      then [createIssue info Warning HandleTypesCastToInt]
+                else if isUIntType castTo then [createIssue info Warning HandleTypesCastToUInt]
+                else []
             _ -> []
     checkCast _ _ _ = []
 

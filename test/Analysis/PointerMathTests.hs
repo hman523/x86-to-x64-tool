@@ -19,6 +19,11 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
             "void foo() { int *a; int *b; long diff; diff = a - b; }"
             checkPtrDiffStoredAs32bit
 
+        shouldFlagError
+            "flags pointer subtraction stored in unsigned int"
+            "void foo() { int *a; int *b; unsigned int diff; diff = a - b; }"
+            checkPtrDiffStoredAs32bit
+
         shouldNotFlagError
             "does not flag non-pointer subtraction stored in int"
             "void foo() { int a = 10; int b = 3; int diff; diff = a - b; }"
@@ -33,6 +38,11 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
         shouldNotFlagError
             "does not flag pointer addition with a long"
             "void foo() { int *p; long n; int *q = p + n; }"
+            checkPtrAddOverflow
+
+        shouldFlagError
+            "flags pointer addition with an unsigned int offset"
+            "void foo() { int *p; unsigned int n; int *q = p + n; }"
             checkPtrAddOverflow
 
     describe "checkPtrSubUnderflow" $ do
@@ -55,6 +65,11 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
         shouldNotFlagError
             "does not flag array indexing with long variable"
             "void foo() { int arr[10]; long i; int x = arr[i]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+
+        shouldFlagError
+            "flags array indexing with unsigned int variable"
+            "void foo() { int arr[10]; unsigned int i; int x = arr[i]; }"
             checkArrayIndexingIntInArrayOver2tothe31size
 
         shouldNotFlagError

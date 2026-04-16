@@ -15,6 +15,7 @@ lintPlatformSpecificsIssues ast issues = foldl applyOne (ast, []) issues
       InlineAsmWithx86Instructions  -> lintInlineAsmWithx86Instructions  a issue
       AsmBlocks                     -> lintAsmBlocks                     a issue
       HandleTypesCastToInt          -> lintHandleTypesCastToInt          a issue
+      HandleTypesCastToUInt         -> lintHandleTypesCastToUInt         a issue
       X86SpecificCompilerIntrinsics -> lintX86SpecificCompilerIntrinsics a issue
       AssumptionsAboutRegSizes      -> lintAssumptionsAboutRegSizes      a issue
       _                             -> (a, Just issue)
@@ -37,6 +38,10 @@ lintAsmBlocks = unlintable
 lintHandleTypesCastToInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintHandleTypesCastToInt ast issue =
     (replaceCastType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
+
+lintHandleTypesCastToUInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintHandleTypesCastToUInt ast issue =
+    (replaceCastType (issuePos issue) (typedefSpec "uintptr_t") ast, Nothing)
 
 -- Cannot be done automatically: x86 SIMD intrinsics (_mm_*, __builtin_ia32_*)
 -- are 32-bit-specific. While 64-bit x86 also supports SSE/AVX, the programmer

@@ -31,7 +31,7 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
                 condHasPD  = hasPtrDiff tenv env' cond
                 mDeclPos   = firstDeclrNi decl
             in [ createIssueWithDecl info mDeclPos Warning LoopCounterAsIntWhenIteratingOverPtrArrays
-               | any isIntType' ctrTypes && condHasPD ]
+               | any (\t -> isIntType' t || isUIntType t) ctrTypes && condHasPD ]
                ++ walkStmt tenv env' body
         CCompound _ items _ ->
             let (issues, _) = foldl (stepWalk tenv) ([], env) items
@@ -99,7 +99,7 @@ checkUsingIntForFileOffsets ast@(CTranslUnit decls _) =
                     CVar (Ident name _ _) _ -> lookupDeclPos env name
                     _                       -> Nothing
             in [ createIssueWithDecl info mDeclPos Warning UsingIntForFileOffsets
-               | isIntType' offsetType ]
+               | isIntType' offsetType || isUIntType offsetType ]
     checkCall _ _ _ = []
 
     seekFns :: [String]

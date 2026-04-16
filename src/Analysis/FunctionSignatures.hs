@@ -64,9 +64,12 @@ checkFnsReturnPtrAsInt ast@(CTranslUnit decls _) =
     checkTop tenv (CFDefExt funDef@(CFunDef specs _ _ body _)) =
         let retType  = resolveTypedef tenv (resolveType specs [])
             paramEnv = buildFuncParamEnv funDef
-        in if isIntType' retType
-           then walkReturns (checkRetPtr tenv FnsReturnPtrAsInt) paramEnv body
-           else []
+        in let tag | isIntType' retType = Just FnsReturnPtrAsInt
+                   | isUIntType retType  = Just FnsReturnPtrAsUInt
+                   | otherwise           = Nothing
+           in case tag of
+               Just t  -> walkReturns (checkRetPtr tenv t) paramEnv body
+               Nothing -> []
     checkTop _ _ = []
 
     checkRetPtr tenv tag env expr info =
@@ -106,11 +109,16 @@ checkFnsParamDeclaredAsIntTakesPtr ast@(CTranslUnit decls _) =
         case lhs of
             CVar (Ident name _ _) _ ->
                 case Map.lookup name paramEnv of
-                    Just (declaredType, mDeclPos)
-                        | isIntType' (resolveTypedef tenv declaredType) ->
-                            let rhsType = resolveTypedef tenv (typeOfExpr env rhs)
-                            in [ createIssueWithDecl info mDeclPos Critical FnsParamDeclaredAsIntTakesPtr
-                               | isPointer rhsType ]
+                    Just (declaredType, mDeclPos) ->
+                        let rt      = resolveTypedef tenv declaredType
+                            rhsType = resolveTypedef tenv (typeOfExpr env rhs)
+                            mtag | isIntType'  rt = Just FnsParamDeclaredAsIntTakesPtr
+                                 | isUIntType  rt = Just FnsParamDeclaredAsUIntTakesPtr
+                                 | otherwise      = Nothing
+                        in case mtag of
+                            Just t | isPointer rhsType ->
+                                [createIssueWithDecl info mDeclPos Critical t]
+                            _ -> []
                     _ -> []
             _ -> []
     checkAssign _ _ _ _ = []
@@ -123,6 +131,7 @@ checkVaargUsingWrongTypesForPtrArgs ast@(CTranslUnit decls _) =
   where
     checkVaArg tenv _env (CBuiltinExpr (CBuiltinVaArg _ decl info)) =
         let t = resolveTypedef tenv (typeOfDecl decl)
-        in [ createIssue info Warning VaargUsingWrongTypesForPtrArgs
-           | isIntType' t ]
+        in if isIntType' t      then [createIssue info Warning VaargUsingWrongTypesForPtrArgs]
+           else if isUIntType t then [createIssue info Warning VaargUsingWrongTypesForPtrArgsUInt]
+           else []
     checkVaArg _ _ _ = []

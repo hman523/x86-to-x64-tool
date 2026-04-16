@@ -64,7 +64,9 @@ nonSETypes =
     , CastIntToPointer
     , CastLongToPointer
     , HandleTypesCastToInt
+    , HandleTypesCastToUInt
     , FnsReturnPtrAsInt
+    , FnsReturnPtrAsUInt
     , FnsReturnPtrAsLong
     , LdUsedWithLongAssuming64bits
     , LuUsedForPtrSizedVals

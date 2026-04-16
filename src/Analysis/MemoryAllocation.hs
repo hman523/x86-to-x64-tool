@@ -32,7 +32,7 @@ checkAllocationSizeCalcsMayOverflow ast@(CTranslUnit decls _) =
         let lt = resolveTypedef tenv (typeOfExpr env l)
             rt = resolveTypedef tenv (typeOfExpr env r)
         in [ createIssue callInfo Critical AllocationSizeCalcsMayOverflow
-           | isIntType' lt && isIntType' rt ]
+           | (isIntType' lt || isUIntType lt) && (isIntType' rt || isUIntType rt) ]
     checkSizeExpr _ _ _ _ = []
 
 -- | Flag malloc/calloc/realloc where the size arg is an integer addition
@@ -51,7 +51,7 @@ checkMallocWithoutOverflowChecking ast@(CTranslUnit decls _) =
         let lt = resolveTypedef tenv (typeOfExpr env l)
             rt = resolveTypedef tenv (typeOfExpr env r)
         in [ createIssue callInfo Warning MallocWithoutOverflowChecking
-           | isIntType' lt && isIntType' rt ]
+           | (isIntType' lt || isUIntType lt) && (isIntType' rt || isUIntType rt) ]
     checkSizeExpr _ _ _ _ = []
 
 -- | Flag assignments where a sizeof result is stored in an int/uint variable
@@ -67,7 +67,7 @@ checkUsingIntToStoreAllocationSizes ast@(CTranslUnit decls _) =
                 CVar (Ident name _ _) _ -> lookupDeclPos env name
                 _                       -> Nothing
         in [ createIssueWithDecl info mDeclPos Warning UsingIntToStoreAllocationSizes
-           | isIntType' lhsType && hasSizeof rhs ]
+           | (isIntType' lhsType || isUIntType lhsType) && hasSizeof rhs ]
     checkAssign _ _ _ = []
 
     hasSizeof (CSizeofType _ _) = True

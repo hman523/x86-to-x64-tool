@@ -12,7 +12,9 @@ analyzeBitManipulationIssues ast =
     ++ checkBitShiftsOnPtr ast
     ++ checkExtractingPtrBitsIn32BitVar ast
 
--- | Flag bit-OR of a pointer with flags, then cast to int (packs pointer+flags in int).
+-- | Flag bit-OR of a pointer with flags, then cast to int or unsigned int
+--   (packs pointer+flags in a 32-bit integer, truncating the upper bits on
+--   64-bit targets).
 checkPackingPtrsWithFlagsInInt :: CTranslUnit -> [Issue]
 checkPackingPtrsWithFlagsInInt ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
@@ -20,7 +22,7 @@ checkPackingPtrsWithFlagsInInt ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
-        in case (isIntType' castTo, inner) of
+        in case (isIntType' castTo || isUIntType castTo, inner) of
             (True, CBinary COrOp l _ _) ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                 in [ createIssue info Critical PackingPtrsWithFlagsInInt
@@ -40,7 +42,8 @@ checkBitShiftsOnPtr ast@(CTranslUnit decls _) =
             in [ createIssue info Critical BitShiftsOnPtr | isPointer lt ]
     checkExpr _ _ _ = []
 
--- | Flag cast to int of a right-shifted pointer (extracts pointer bits in 32-bit var).
+-- | Flag cast to int or unsigned int of a right-shifted pointer (extracts
+--   pointer bits in a 32-bit variable, losing the upper bits on 64-bit).
 checkExtractingPtrBitsIn32BitVar :: CTranslUnit -> [Issue]
 checkExtractingPtrBitsIn32BitVar ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
@@ -48,7 +51,7 @@ checkExtractingPtrBitsIn32BitVar ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
-        in case (isIntType' castTo, inner) of
+        in case (isIntType' castTo || isUIntType castTo, inner) of
             (True, CBinary CShrOp l _ _) ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                 in [ createIssue info Critical ExtractingPtrBitsIn32BitVar

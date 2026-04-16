@@ -14,6 +14,11 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "struct Foo { int *ptr; int val; };"
             checkStructsWithMixedPtrNonPtrMembers
 
+        shouldFlagError
+            "flags struct with pointer and unsigned int members"
+            "struct Foo { int *ptr; unsigned int val; };"
+            checkStructsWithMixedPtrNonPtrMembers
+
         shouldNotFlagError
             "does not flag struct with only pointer members"
             "struct Foo { int *a; char *b; };"
@@ -30,6 +35,11 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "union Bar { int *ptr; int val; };"
             checkUnionsContainingPtrAndInts
 
+        shouldFlagError
+            "flags union with pointer and unsigned int members"
+            "union Bar { int *ptr; unsigned int val; };"
+            checkUnionsContainingPtrAndInts
+
         shouldNotFlagError
             "does not flag struct with mixed members (only flags unions)"
             "struct Bar { int *ptr; int val; };"
@@ -39,6 +49,11 @@ alignmentSpec = describe "Alignment Analysis" $ do
         shouldFlagError
             "flags sizeof result assigned to int variable"
             "void foo() { int sz; sz = sizeof(int *); }"
+            checkSizeofStoredIn32bits
+
+        shouldFlagError
+            "flags sizeof result assigned to unsigned int variable"
+            "void foo() { unsigned int sz; sz = sizeof(int *); }"
             checkSizeofStoredIn32bits
 
         shouldNotFlagError

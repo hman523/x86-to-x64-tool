@@ -14,6 +14,11 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
             "void foo() { int n; int m; char *p = malloc(n * m); }"
             checkAllocationSizeCalcsMayOverflow
 
+        shouldFlagError
+            "flags malloc with unsigned int*unsigned int size calculation"
+            "void foo() { unsigned int n; unsigned int m; char *p = malloc(n * m); }"
+            checkAllocationSizeCalcsMayOverflow
+
         shouldNotFlagError
             "does not flag malloc with int*long size calculation"
             "void foo() { int n; long m; char *p = malloc(n * m); }"
@@ -30,6 +35,11 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
             "void foo() { int a; int b; char *p = malloc(a + b); }"
             checkMallocWithoutOverflowChecking
 
+        shouldFlagError
+            "flags malloc with unsigned int+unsigned int size addition"
+            "void foo() { unsigned int a; unsigned int b; char *p = malloc(a + b); }"
+            checkMallocWithoutOverflowChecking
+
         shouldNotFlagError
             "does not flag malloc with int+long size addition"
             "void foo() { int a; long b; char *p = malloc(a + b); }"
@@ -39,6 +49,11 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
         shouldFlagError
             "flags sizeof result stored in int variable"
             "void foo() { int sz; int *p; sz = sizeof(*p); }"
+            checkUsingIntToStoreAllocationSizes
+
+        shouldFlagError
+            "flags sizeof result stored in unsigned int variable"
+            "void foo() { unsigned int sz; int *p; sz = sizeof(*p); }"
             checkUsingIntToStoreAllocationSizes
 
         shouldNotFlagError

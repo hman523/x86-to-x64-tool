@@ -58,7 +58,7 @@ checkStructsWithMixedPtrNonPtrMembers ast = walkStructDefs checkSU ast
     checkSU (CStruct CStructTag _ (Just members) _ info) =
         let types       = concatMap getMemberTypes members
             hasPtrs     = any isPointer types
-            hasIntTypes = any (\ t -> isIntType' t || isLongType' t) types
+            hasIntTypes = any (\ t -> isIntType' t || isUIntType t || isLongType' t) types
         in [ createIssue info Warning StructsWithMixedPtrNonPtrMembers
            | hasPtrs && hasIntTypes ]
     checkSU _ = []
@@ -70,7 +70,7 @@ checkUnionsContainingPtrAndInts ast = walkStructDefs checkSU ast
     checkSU (CStruct CUnionTag _ (Just members) _ info) =
         let types    = concatMap getMemberTypes members
             hasPtrs  = any isPointer types
-            hasInts  = any (\ t -> isIntType' t || isLongType' t) types
+            hasInts  = any (\ t -> isIntType' t || isUIntType t || isLongType' t) types
         in [ createIssue info Warning UnionsContainingPtrAndInts
            | hasPtrs && hasInts ]
     checkSU _ = []
@@ -137,7 +137,7 @@ checkSizeofStoredIn32bits ast@(CTranslUnit decls _) =
                 CVar (Ident name _ _) _ -> lookupDeclPos env name
                 _                       -> Nothing
         in [ createIssueWithDecl info mDeclPos Warning SizeofStoredin32bits
-           | isIntType' lhsType && isSizeof rhs ]
+           | (isIntType' lhsType || isUIntType lhsType) && isSizeof rhs ]
     checkAssign _ _ _ = []
 
     isSizeof (CSizeofType _ _) = True
