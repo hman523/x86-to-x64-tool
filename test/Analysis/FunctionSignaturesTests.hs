@@ -75,3 +75,26 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "void foo(int x, int y) { int *p; int *q; x = p; y = q; }"
             analyzeFunctionSignatureIssues
             2
+
+    describe "function signature edge cases" $ do
+
+        shouldFlagNIssues
+            "three int params all receiving different pointer types produce three issues"
+            "void foo(int h1, int h2, int h3) { int *p; char *s; void *v; h1 = p; h2 = s; h3 = v; }"
+            checkFnsParamDeclaredAsIntTakesPtr
+            3
+
+        shouldNotFlagError
+            "function returning pointer declared as long* is not flagged by checkFnsReturnPtrAsInt"
+            "long *foo() { long *p = 0; return p; }"
+            checkFnsReturnPtrAsInt
+
+        shouldFlagError
+            "function returning void* declared as int is flagged"
+            "int foo() { void *p = 0; return p; }"
+            checkFnsReturnPtrAsInt
+
+        shouldNotFlagError
+            "function pointer declaration with long param does not trigger checkFnsReturnPtrAsLong (only definitions are checked)"
+            "typedef long (*callback_t)(void *p);"
+            checkFnsReturnPtrAsLong

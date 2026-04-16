@@ -96,7 +96,7 @@ buildFunEnv (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
     getParams _                            = []
 
 -- ---------------------------------------------------------------------------
--- Global declarations (no function body → default to NumberType)
+-- Global declarations (no function body -> default to NumberType)
 -- ---------------------------------------------------------------------------
 
 applyToGlobalDecl :: [CFunctionDef NodeInfo]
@@ -180,7 +180,7 @@ isCompoundBase (CArrDeclr _ _ _ : _) = True
 isCompoundBase _                      = False
 
 -- ---------------------------------------------------------------------------
--- AbstractType → replacement specifier
+-- AbstractType -> replacement specifier
 -- ---------------------------------------------------------------------------
 
 -- | Map an abstract type category and its original signedness to the

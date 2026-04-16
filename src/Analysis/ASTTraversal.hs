@@ -32,13 +32,23 @@ analyzeDecl f ctx (CFDefExt funDef) = analyzeFunDef f ctx funDef
 analyzeDecl _ _ (CDeclExt _)        = []
 analyzeDecl _ _ _                   = []
 
--- | Descend into a function definition, skipping the signature and going
---   straight to the body statement.
+-- | Descend into a function definition.  Function parameters are added to
+--   the initial TypeEnv so that checkers can resolve their types when they
+--   appear inside the body (e.g. @void f(void *p) { … (int)p … }@).
 analyzeFunDef :: (TypeEnv -> CExpression NodeInfo -> [Issue])
               -> TypeEnv
               -> CFunctionDef NodeInfo
               -> [Issue]
-analyzeFunDef f ctx (CFunDef _ _ _ stmt _) = analyzeStmt f ctx stmt
+analyzeFunDef f ctx (CFunDef _ declr _ stmt _) =
+    analyzeStmt f (extractParamEnv declr ctx) stmt
+
+-- | Collect the type-annotated formal parameters declared in a function
+--   declarator and insert them into the given environment.
+extractParamEnv :: CDeclarator NodeInfo -> TypeEnv -> TypeEnv
+extractParamEnv (CDeclr _ derived _ _ _) env = foldr addFunParams env derived
+  where
+    addFunParams (CFunDeclr (Right (params, _)) _ _) acc = foldr collectDecl acc params
+    addFunParams _ acc = acc
 
 -- | Recursively walk a statement, collecting issues from every expression it
 --   contains.  The TypeEnv is extended as new local variables come into scope
@@ -82,10 +92,27 @@ analyzeStmt f env stmt = case stmt of
             bodyIssues = analyzeStmt f env' body
         in initIssues ++ condIssues ++ stepIssues ++ bodyIssues
 
+    -- switch statement: check the switched expression and the body (which is
+    -- normally a compound block containing CCase/CDefault items).
+    CSwitch expr body _    -> walkExpr f env expr ++ analyzeStmt f env body
+
+    -- case label: check the case expression and then the labelled sub-statement.
+    CCase expr inner _     -> walkExpr f env expr ++ analyzeStmt f env inner
+
+    -- case range (GNU extension lo..hi): check both bounds and the body.
+    CCases lo hi inner _   -> walkExpr f env lo ++ walkExpr f env hi
+                              ++ analyzeStmt f env inner
+
+    -- default label: descend into the sub-statement.
+    CDefault inner _       -> analyzeStmt f env inner
+
+    -- named label: descend into the labelled sub-statement.
+    CLabel _ inner _ _     -> analyzeStmt f env inner
+
     -- return statement: check the returned expression.
     CReturn (Just expr) _  -> walkExpr f env expr
 
-    -- Other statements (break, continue, goto, labels, …) contain no
+    -- Other statements (break, continue, goto, …) contain no
     -- sub-expressions that need checking.
     _                      -> []
 

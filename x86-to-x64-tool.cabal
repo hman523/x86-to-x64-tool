@@ -62,6 +62,7 @@ library
     exposed-modules:  
         X86_to_X64,
         Parser.Parser,
+        Parser.FormatSpecParser,
         Analysis.Analysis,
         Analysis.IssueTypes,
         Analysis.ASTTraversal,

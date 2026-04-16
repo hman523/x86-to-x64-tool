@@ -74,3 +74,29 @@ comparisonSpec = describe "Comparison Analysis" $ do
             "void foo() { int *p; int *q; if (p < 4096) { } if (q > 100) { } }"
             checkPtrComparisonWithIntConsts
             2
+
+    describe "compound loop condition edge cases" $ do
+
+        shouldFlagError
+            "int counter in compound condition: i < (end - start) && i < 100"
+            "void foo() { int *start; int *end; \
+            \for (int i = 0; i < (end - start) && i < 100; i++) { } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays
+
+        shouldFlagError
+            "int counter with pointer subtraction on right side of &&"
+            "void foo() { int *start; int *end; \
+            \for (int i = 0; i < 100 && i < (end - start); i++) { } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays
+
+        shouldNotFlagError
+            "long counter in compound condition is not flagged"
+            "void foo() { int *start; int *end; \
+            \for (long i = 0; i < (end - start) && i < 100; i++) { } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays
+
+        shouldFlagError
+            "int counter with pointer subtraction nested in || condition"
+            "void foo() { int *start; int *end; int limit; \
+            \for (int i = 0; i < (end - start) || i < limit; i++) { } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays

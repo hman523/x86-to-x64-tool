@@ -37,7 +37,7 @@ syncCasts :: RetypeMap -> CTranslUnit -> CTranslUnit
 syncCasts rmap = everywhere (mkT fixExpr) . everywhere (mkT fixDecl)
   where
     -- -----------------------------------------------------------------------
-    -- Fix assignment RHS: x = (long) e  →  x = (newSpec) e
+    -- Fix assignment RHS: x = (long) e  ->  x = (newSpec) e
     -- -----------------------------------------------------------------------
     fixExpr :: CExpression NodeInfo -> CExpression NodeInfo
     fixExpr (CAssign op lhs@(CVar (Ident n _ _) _) rhs ni)
@@ -47,7 +47,7 @@ syncCasts rmap = everywhere (mkT fixExpr) . everywhere (mkT fixDecl)
     fixExpr e = e
 
     -- -----------------------------------------------------------------------
-    -- Fix declaration initialiser: T x = (long) e  →  T x = (newSpec) e
+    -- Fix declaration initialiser: T x = (long) e  ->  T x = (newSpec) e
     -- -----------------------------------------------------------------------
     fixDecl :: CDeclaration NodeInfo -> CDeclaration NodeInfo
     fixDecl (CDecl specs declrs ni) = CDecl specs (map fixDeclr declrs) ni

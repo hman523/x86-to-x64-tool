@@ -8,22 +8,22 @@
 --        * Function parameter retypings and va_arg type corrections
 --        * Format-string specifier fixes for already-typed size_t/ptrdiff_t/ptr
 --
---   2. 'transformStructMembers': @long@ struct/union member → @int32_t@
+--   2. 'transformStructMembers': @long@ struct/union member -> @int32_t@
 --
---   3. 'transformTypedefs': @typedef long T@ → @typedef int32_t T@
+--   3. 'transformTypedefs': @typedef long T@ -> @typedef int32_t T@
 --
---   4. 'transformSizeofLong': @sizeof(long)@ → @sizeof(int32_t)@
+--   4. 'transformSizeofLong': @sizeof(long)@ -> @sizeof(int32_t)@
 --
---   5. 'transformReturnTypes': @long f(...)@ return type → classified type
+--   5. 'transformReturnTypes': @long f(...)@ return type -> classified type
 --
---   6. 'transformLongs': remaining @long@ variable declarations → fixed-width
+--   6. 'transformLongs': remaining @long@ variable declarations -> fixed-width
 --      type via usage-based classification; produces a 'RetypeMap'.
 --
---   7. 'syncCasts': @(long)@ casts paired with a retyped variable →
+--   7. 'syncCasts': @(long)@ casts paired with a retyped variable ->
 --      matching fixed-width cast.
 --
 --   8. 'fixStandaloneCasts': remaining standalone @(long)@ / @(long *)@
---      casts not paired with a retyped variable → @(int32_t)@ / @(int32_t *)@.
+--      casts not paired with a retyped variable -> @(int32_t)@ / @(int32_t *)@.
 --
 --   Non-SE linter fixes excluded (see 'nonSETypes'):
 --     cast-only rewrites, return-expression wrapping, %ld/%lu specifier fixes.
@@ -73,20 +73,21 @@ nonSETypes =
 -- | Produce a semantically equivalent 64-bit version of the translation unit.
 transform :: CTranslUnit -> CTranslUnit
 transform ast =
-    let issues        = filter ((`notElem` nonSETypes) . issueType) (analysis ast)
-        (ast1, _)     = lint ast issues
-        ast2          = transformStructMembers ast1
-        ast3          = transformTypedefs ast2
-        ast4          = transformSizeofLong ast3
-        ast5          = transformReturnTypes ast4
-        ast5a         = splitMultiLongDecls ast5
-        (ast6, rmap)  = transformLongs ast5a
-        ast7          = transformFunPtrParams ast6
-        ast8          = syncCasts rmap ast7
-        ast9          = fixStandaloneCasts ast8
-        ast10         = fixFormatStrings rmap ast9
-        ast11         = stripLongSuffixes rmap ast10
-    in ast11
+    let issues       = filter ((`notElem` nonSETypes) . issueType) (analysis ast)
+        (linted, _)  = lint ast issues
+        (ast', rmap) = ( transformLongs
+                       . splitMultiLongDecls
+                       . transformReturnTypes
+                       . transformSizeofLong
+                       . transformTypedefs
+                       . transformStructMembers
+                       ) linted
+    in ( stripLongSuffixes rmap
+       . fixFormatStrings  rmap
+       . fixStandaloneCasts
+       . syncCasts         rmap
+       . transformFunPtrParams
+       ) ast'
 
 -- | Prepend @#include@ directives required by types introduced during
 --   transformation.  Operates on the already pretty-printed source string
@@ -95,8 +96,8 @@ addRequiredIncludes :: String -> String
 addRequiredIncludes src =
     let stdint  = any (`isInfixOf` src) ["int32_t", "uint32_t", "intptr_t", "uintptr_t"]
         stddef  = any (`isInfixOf` src) ["size_t", "ptrdiff_t"]
-        headers = (if stdint then ["#include <stdint.h>"] else [])
-               ++ (if stddef then ["#include <stddef.h>"] else [])
+        headers = (["#include <stdint.h>" | stdint])
+               ++ (["#include <stddef.h>" | stddef])
     in if null headers then src
        else unlines headers ++ "\n" ++ src
 

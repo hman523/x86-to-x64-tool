@@ -8,6 +8,7 @@ import Language.C.Data.Position (posOf)
 import Language.C.Data.Ident (Ident(..))
 import Analysis.IssueTypes
 import Analysis.FormatStrings (fmtArgIndex)
+import Parser.FormatSpecParser (parseLenMod)
 
 -- ---------------------------------------------------------------------------
 -- Module-level dispatcher
@@ -133,7 +134,7 @@ replaceFmtSpecOnce oldLen oldConv newLen newConv = go False
                                  ('.':r) -> let (p, r') = span (`elem` "0123456789") r
                                             in ('.' : p, r')
                                  _       -> ("", s2)
-            (lenMod, s4)   = parseLenMod' s3
+            (lenMod, s4)   = parseLenMod s3
         in case s4 of
             []    -> flags ++ width ++ prec ++ lenMod   -- malformed, keep as-is
             (c:r)
@@ -144,14 +145,4 @@ replaceFmtSpecOnce oldLen oldConv newLen newConv = go False
                     -- Not the specifier we want; keep it and keep looking
                     flags ++ width ++ prec ++ lenMod ++ [c] ++ go False r
 
-parseLenMod' :: String -> (String, String)
-parseLenMod' ('h':'h':r) = ("hh", r)
-parseLenMod' ('l':'l':r) = ("ll", r)
-parseLenMod' ('h':r)     = ("h",  r)
-parseLenMod' ('l':r)     = ("l",  r)
-parseLenMod' ('j':r)     = ("j",  r)
-parseLenMod' ('z':r)     = ("z",  r)
-parseLenMod' ('t':r)     = ("t",  r)
-parseLenMod' ('L':r)     = ("L",  r)
-parseLenMod' ('q':r)     = ("q",  r)
-parseLenMod' r           = ("",   r)
+

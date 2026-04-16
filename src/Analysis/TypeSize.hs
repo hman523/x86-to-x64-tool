@@ -25,61 +25,33 @@ analyzeTypeSizeIssues ast =
 -- Pointer <-> Int cast checkers
 -- ---------------------------------------------------------------------------
 
--- | Check for (int)ptr casts
-checkPointerToInt :: CTranslUnit -> [Issue]
-checkPointerToInt ast@(CTranslUnit decls _) =
+-- | Helper: build a cast checker from a predicate on (castTo, castFrom) types.
+castChecker :: (CType -> CType -> Bool) -> IssueTag -> CTranslUnit -> [Issue]
+castChecker predicate tag ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
     in concatMap (analyzeDecl (checkCast tenv) Map.empty) decls
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
             castFrom = resolveTypedef tenv (typeOfExpr env inner)
-        in if isIntType' castTo && isPointer castFrom
-           then [createIssue info Critical CastPointerToInt]
-           else []
+        in [createIssue info Critical tag | predicate castTo castFrom]
     checkCast _ _ _ = []
+
+-- | Check for (int)ptr casts
+checkPointerToInt :: CTranslUnit -> [Issue]
+checkPointerToInt = castChecker (\to_ from -> isIntType' to_  && isPointer  from) CastPointerToInt
 
 -- | Check for (unsigned int)ptr casts
 checkPointerToUInt :: CTranslUnit -> [Issue]
-checkPointerToUInt ast@(CTranslUnit decls _) =
-    let tenv = buildTypedefEnv ast
-    in concatMap (analyzeDecl (checkCast tenv) Map.empty) decls
-  where
-    checkCast tenv env (CCast castDecl inner info) =
-        let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
-            castFrom = resolveTypedef tenv (typeOfExpr env inner)
-        in if isUIntType castTo && isPointer castFrom
-           then [createIssue info Critical CastPointerToUInt]
-           else []
-    checkCast _ _ _ = []
+checkPointerToUInt = castChecker (\to_ from -> isUIntType to_  && isPointer  from) CastPointerToUInt
 
 -- | Check for (int*)x casts where x is an int
 checkIntToPointer :: CTranslUnit -> [Issue]
-checkIntToPointer ast@(CTranslUnit decls _) =
-    let tenv = buildTypedefEnv ast
-    in concatMap (analyzeDecl (checkCast tenv) Map.empty) decls
-  where
-    checkCast tenv env (CCast castDecl inner info) =
-        let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
-            castFrom = resolveTypedef tenv (typeOfExpr env inner)
-        in if isPointer castTo && isIntType' castFrom
-           then [createIssue info Critical CastIntToPointer]
-           else []
-    checkCast _ _ _ = []
+checkIntToPointer = castChecker (\to_ from -> isPointer  to_  && isIntType'  from) CastIntToPointer
 
 -- | Check for (int*)x casts where x is a long
 checkLongToPointer :: CTranslUnit -> [Issue]
-checkLongToPointer ast@(CTranslUnit decls _) =
-    let tenv = buildTypedefEnv ast
-    in concatMap (analyzeDecl (checkCast tenv) Map.empty) decls
-  where
-    checkCast tenv env (CCast castDecl inner info) =
-        let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
-            castFrom = resolveTypedef tenv (typeOfExpr env inner)
-        in if isPointer castTo && isLongType' castFrom
-           then [createIssue info Critical CastLongToPointer]
-           else []
-    checkCast _ _ _ = []
+checkLongToPointer = castChecker (\to_ from -> isPointer  to_  && isLongType' from) CastLongToPointer
 
 -- ---------------------------------------------------------------------------
 -- sizeof comparisons

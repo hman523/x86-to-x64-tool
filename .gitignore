@@ -36,5 +36,6 @@ cabal.project.local~
 .history
 .ionide
 
+test/c_progs/cross_arch/.results/*
 *.x64.c
 .DS_Store

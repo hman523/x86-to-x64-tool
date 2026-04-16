@@ -80,3 +80,28 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
             "void foo() { int *a; int *b; int diff; diff = a - b; int n; int *c = a + n; unsigned int m; int *d = a - m; int arr[10]; int idx; int x = arr[idx]; }"
             analyzePointerMathIssues
             4
+
+    describe "multi-dimensional array index edge cases" $ do
+
+        shouldFlagNIssues
+            "arr[i][j] with both int indices produces two issues"
+            "void foo() { int arr[10][10]; int i; int j; int x = arr[i][j]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+            2
+
+        shouldNotFlagError
+            "arr[i][j] with both long indices is not flagged"
+            "void foo() { int arr[10][10]; long i; long j; int x = arr[i][j]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+
+        shouldFlagNIssues
+            "arr[i][j] with first index long and second int: only second is flagged"
+            "void foo() { int arr[10][10]; long i; int j; int x = arr[i][j]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+            1
+
+        shouldFlagNIssues
+            "three-level arr[i][j][k] with all int indices produces three issues"
+            "void foo() { int arr[4][4][4]; int i; int j; int k; int x = arr[i][j][k]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+            3

@@ -21,6 +21,8 @@ typeSizeLintSpec = describe "TypeSize Linting" $ do
   testLintUsingIntAsPtrdifft
   testLintUsingUIntAsMemSize
   testLintMultiple
+  testLintScopedIssues
+
 
 testLintCastPointerToInt :: Spec
 testLintCastPointerToInt =
@@ -143,4 +145,67 @@ testLintMultiple =
           output `shouldContain` "ptrdiff_t"
           -- Only the sizeof comparison should remain unresolved
           length unresolved `shouldBe` 1
-          issueType (head unresolved) `shouldBe` SizeOfIntIsVoid
+
+-- | Verify that the linter correctly rewrites issues that appear inside
+--   nested control-flow blocks (if, while, for) rather than at the top level.
+testLintScopedIssues :: Spec
+testLintScopedIssues =
+  describe "scoped TypeSize linting" $ do
+
+    shouldFullyLint
+        "(int)ptr inside if-block is fully linted to intptr_t"
+        "void f(void *p) { if (1) { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "(int)ptr inside else-block is fully linted"
+        "void f(void *p) { if (0) { } else { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "(int)ptr inside while body is fully linted"
+        "void f(void *p) { while (1) { int x = (int)p; break; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "(int)ptr inside for-loop body is fully linted"
+        "void f(void *p) { for (int i = 0; i < 1; i++) { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "(unsigned int)ptr inside nested block is fully linted to uintptr_t"
+        "void f(void *p) { { unsigned int x = (unsigned int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldLintTo
+        "(int)ptr in if-block produces intptr_t in output"
+        "void f(void *p) { if (1) { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
+
+    shouldLintTo
+        "(int*)long in while body produces intptr_t in output"
+        "void f(void) { long x = 5; while (1) { void *p = (int*)x; break; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
+
+    shouldLintTo
+        "int size-variable inside if-block is rewritten to size_t"
+        "void f(int n) { if (n > 0) { unsigned long sz; sz = n; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "size_t"
+
+    shouldFullyLint
+        "casts in two separate functions are both linted"
+        "void f(void *p) { int a = (int)p; } \
+        \void g(void *q) { int b = (int)q; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues

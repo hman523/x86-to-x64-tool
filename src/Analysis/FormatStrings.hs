@@ -7,6 +7,7 @@ import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Parser.FormatSpecParser (parseLenMod)
 import qualified Data.Map as Map
 
 analyzeFormatStringIssues :: CTranslUnit -> [Issue]
@@ -67,18 +68,6 @@ parseSpec s =
     in case s4 of
         []    -> []
         (c:r) -> FmtSpec lenMod c : parseFormatSpecs r
-
-parseLenMod :: String -> (String, String)
-parseLenMod ('h':'h':r) = ("hh", r)
-parseLenMod ('l':'l':r) = ("ll", r)
-parseLenMod ('h':r)     = ("h",  r)
-parseLenMod ('l':r)     = ("l",  r)
-parseLenMod ('j':r)     = ("j",  r)
-parseLenMod ('z':r)     = ("z",  r)
-parseLenMod ('t':r)     = ("t",  r)
-parseLenMod ('L':r)     = ("L",  r)
-parseLenMod ('q':r)     = ("q",  r)
-parseLenMod r           = ("",   r)
 
 -- ---------------------------------------------------------------------------
 -- Call-site analysis

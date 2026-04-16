@@ -84,3 +84,35 @@ formatStringsSpec = describe "FormatStrings Analysis" $ do
             "void foo() { int *p; unsigned long sz; printf(\"%d\", p); printf(\"%d\", sz); }"
             analyzeFormatStringIssues
             [DUsedWithPtr, DUsedWithSizet]
+
+    describe "flags and width in format specifiers" $ do
+
+        shouldFlagError
+            "flags %+5ld with long argument: still flagged as LdUsedWithLongAssuming64bits"
+            "void foo() { long n; printf(\"%+5ld\\n\", n); }"
+            checkldUsedWithLongAssuming64bits
+
+        shouldFlagError
+            "flags %-10ld with long argument: still flagged"
+            "void foo() { long n; printf(\"%-10ld\\n\", n); }"
+            checkldUsedWithLongAssuming64bits
+
+        shouldFlagError
+            "flags %05lu with pointer argument: still flagged as LuUsedForPtrSizedVals"
+            "void foo() { int *p; printf(\"%05lu\\n\", p); }"
+            checkluUsedForPtrSizedVals
+
+        shouldFlagError
+            "flags %+ld with long: flagged even when sign flag present"
+            "void foo() { long n; printf(\"%+ld\\n\", n); }"
+            checkldUsedWithLongAssuming64bits
+
+        shouldFlagError
+            "precision .5 present: %10.5ld still flagged"
+            "void foo() { long n; printf(\"%10.5ld\\n\", n); }"
+            checkldUsedWithLongAssuming64bits
+
+        shouldNotFlagError
+            "flags and width with correct %ld for long: not flagged when correct specifier used"
+            "void foo() { int n; printf(\"%+5d\\n\", n); }"
+            checkldUsedWithLongAssuming64bits

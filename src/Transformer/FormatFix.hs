@@ -5,8 +5,8 @@
 --   @uint32_t@, any @printf@-family format specifier that was written as @%ld@
 --   or @%lu@ for what was a 32-bit @long@ is now mismatched:
 --
---   * @int32_t@ is 4 bytes; @%ld@ reads a 64-bit @long@  → UB on LP64.
---   * @uint32_t@ is 4 bytes; @%lu@ reads a 64-bit @unsigned long@ → UB.
+--   * @int32_t@ is 4 bytes; @%ld@ reads a 64-bit @long@  -> UB on LP64.
+--   * @uint32_t@ is 4 bytes; @%lu@ reads a 64-bit @unsigned long@ -> UB.
 --
 --   This pass corrects those specifiers.  For each @printf@-family call whose
 --   format argument is a string literal, it aligns the format specifiers with
@@ -15,12 +15,12 @@
 --   the one appropriate for the new type:
 --
 --   @long@ variable after retype:
---     * @int32_t@   → @%ld@ / @%td@ / @%zd@ become @%d@
---     * @uint32_t@  → @%lu@ / @%tu@ / @%zd@ become @%u@
---     * @ptrdiff_t@ → @%d@ / @%ld@ become @%td@
---     * @size_t@    → @%d@ / @%lu@ become @%zu@
---     * @intptr_t@  → @%d@ becomes @%ld@ (correct on LP64; already correct if @%ld@)
---     * @uintptr_t@ → @%u@ becomes @%lu@ (correct on LP64)
+--     * @int32_t@   -> @%ld@ / @%td@ / @%zd@ become @%d@
+--     * @uint32_t@  -> @%lu@ / @%tu@ / @%zd@ become @%u@
+--     * @ptrdiff_t@ -> @%d@ / @%ld@ become @%td@
+--     * @size_t@    -> @%d@ / @%lu@ become @%zu@
+--     * @intptr_t@  -> @%d@ becomes @%ld@ (correct on LP64; already correct if @%ld@)
+--     * @uintptr_t@ -> @%u@ becomes @%lu@ (correct on LP64)
 --
 --   Only specifiers directly aligned with a retyped variable (plain @CVar@
 --   argument) are modified.  Expressions, casts, and non-@%ld@/@%lu@
@@ -38,6 +38,7 @@ import Language.C.Data.Node        (NodeInfo)
 import Language.C.Data.Ident       (Ident(..))
 
 import Analysis.FormatStrings      (fmtArgIndex, getFmtString)
+import Parser.FormatSpecParser     (parseLenMod)
 import Transformer.LongReplacement (RetypeMap)
 
 -- | Fix @%ld@ / @%lu@ format specifiers that are now mismatched after the
@@ -83,12 +84,12 @@ fixFormatStrings rmap = everywhere (mkT fixCall)
     --
     --   This handles both directions:
     --   * @%ld@ / @%lu@ for a variable now typed @int32_t@ / @uint32_t@
-    --     → strip the @l@ modifier → @%d@ / @%u@
+    --     -> strip the @l@ modifier -> @%d@ / @%u@
     --   * @%td@ / @%zd@ introduced by the linter for a variable the
     --     transformer later classifies as @int32_t@ / @uint32_t@
-    --     → strip the spurious length modifier → @%d@ / @%u@
+    --     -> strip the spurious length modifier -> @%d@ / @%u@
     --   * @%d@ / @%u@ for a variable now typed @ptrdiff_t@ / @size_t@
-    --     → add the correct length modifier → @%td@ / @%zd@
+    --     -> add the correct length modifier -> @%td@ / @%zd@
     --
     --   Flags, width and precision are always preserved.
     patchSpec :: String -> Maybe String -> String
@@ -155,16 +156,5 @@ fixFormatStrings rmap = everywhere (mkT fixCall)
                []    -> (flags ++ width ++ prec ++ lmod,        [])
                (c:r) -> (flags ++ width ++ prec ++ lmod ++ [c],  r)
 
-    parseLenMod :: String -> (String, String)
-    parseLenMod ('h':'h':r) = ("hh", r)
-    parseLenMod ('l':'l':r) = ("ll", r)
-    parseLenMod ('h':r)     = ("h",  r)
-    parseLenMod ('l':r)     = ("l",  r)
-    parseLenMod ('j':r)     = ("j",  r)
-    parseLenMod ('z':r)     = ("z",  r)
-    parseLenMod ('t':r)     = ("t",  r)
-    parseLenMod ('L':r)     = ("L",  r)
-    parseLenMod ('q':r)     = ("q",  r)
-    parseLenMod r           = ("",   r)
 
 

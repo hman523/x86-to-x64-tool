@@ -181,11 +181,11 @@ data Issue = Issue
     , issueDeclPos  :: Maybe NodeInfo
     , issueSeverity :: Severity
     , issueType     :: IssueTag
-    , catagory      :: Category
+    , category      :: Category
     }
 
 instance Show Issue where
-    show i = show (catagory i) ++ ": " ++ show (issueType i) 
+    show i = show (category i) ++ ": " ++ show (issueType i) 
         ++ " [" ++ map toUpper (show (issueSeverity i)) ++ "]" 
         ++ " at " ++ show (issuePos i)
 
@@ -248,7 +248,7 @@ prettyPrintIssues verbose useColor termWidth issues =
 
         fmt (i, x) =
             let sev    = issueSeverity x
-                cat    = catagory x
+                cat    = category x
                 num    = padLeft numWidth (show i) ++ ") "
                 sevStr = ansi useColor (sevCode sev)
                              (padRight sevWidth ("[" ++ map toUpper (show sev) ++ "]"))

@@ -29,11 +29,11 @@ import qualified Data.Map.Strict as Map
 -- ---------------------------------------------------------------------------
 
 data AbstractType
-    = NumberType   -- ^ plain arithmetic  → int32_t / uint32_t
-    | BitSeqType   -- ^ bit manipulation  → uint32_t
-    | OffsetType   -- ^ pointer difference → ptrdiff_t
-    | SizeType     -- ^ memory size        → size_t
-    | PointerType  -- ^ holds an address   → intptr_t / uintptr_t
+    = NumberType   -- ^ plain arithmetic  -> int32_t / uint32_t
+    | BitSeqType   -- ^ bit manipulation  -> uint32_t
+    | OffsetType   -- ^ pointer difference -> ptrdiff_t
+    | SizeType     -- ^ memory size        -> size_t
+    | PointerType  -- ^ holds an address   -> intptr_t / uintptr_t
     deriving (Show, Eq, Ord)
 
 priority :: AbstractType -> Int
@@ -71,7 +71,7 @@ classifyVar env name funDef =
 --   evidence about how @name@ is used.
 evidenceFromExprNode :: TypeEnv -> String -> CExpression NodeInfo -> [AbstractType]
 evidenceFromExprNode env name expr = case expr of
-    -- Assignment: x = rhs → evidence from what flows into x
+    -- Assignment: x = rhs -> evidence from what flows into x
     CAssign op (CVar (Ident n _ _) _) rhs _
         | n == name -> rhsEvidence env rhs
                        ++ if isBitwiseAssignOp op then [BitSeqType] else []
@@ -110,15 +110,15 @@ evidenceFromDeclNode _ _ _ = []
 -- | What abstract type does this expression imply when assigned to a @long@?
 rhsEvidence :: TypeEnv -> CExpression NodeInfo -> [AbstractType]
 rhsEvidence env rhs = case rhs of
-    -- sizeof(expr) or sizeof(type) → the variable stores a byte count
+    -- sizeof(expr) or sizeof(type) -> the variable stores a byte count
     CSizeofExpr _ _  -> [SizeType]
     CSizeofType _ _  -> [SizeType]
 
-    -- ptr - ptr → the variable stores a pointer difference
+    -- ptr - ptr -> the variable stores a pointer difference
     CBinary CSubOp l r _
         | isPtr (typeOfExpr env l) && isPtr (typeOfExpr env r) -> [OffsetType]
 
-    -- cast from pointer expression → the variable holds an address;
+    -- cast from pointer expression -> the variable holds an address;
     -- otherwise fall through to the inner expression (e.g. a cast wrapping
     -- a ptr-diff or a sizeof still carries that evidence)
     CCast _ inner _
@@ -129,10 +129,10 @@ rhsEvidence env rhs = case rhs of
     CCond _ thenE elseE _
         -> concatMap (rhsEvidence env) (maybe [] (:[]) thenE ++ [elseE])
 
-    -- any other pointer-typed expression → holds an address
+    -- any other pointer-typed expression -> holds an address
     _ | isPtr (typeOfExpr env rhs) -> [PointerType]
 
-    -- bitwise expression on the RHS → bit sequence
+    -- bitwise expression on the RHS -> bit sequence
     CBinary op _ _ _
         | isBitwiseOp op -> [BitSeqType]
     CUnary CCompOp _ _ -> [BitSeqType]

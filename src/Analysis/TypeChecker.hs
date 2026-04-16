@@ -181,10 +181,12 @@ isPointer :: CType -> Bool
 isPointer (TPointer _) = True
 isPointer _            = False
 
+-- | True only for signed @int@.  Unsigned int is handled by 'isUIntType'.
+--   The asymmetry with 'isLongType'' (which includes unsigned long) is
+--   intentional: the two paths share no common check functions.
 isIntType' :: CType -> Bool
-isIntType' TInt  = True
---isIntType' TUInt = True
-isIntType' _     = False
+isIntType' TInt = True
+isIntType' _    = False
 
 isLongType' :: CType -> Bool
 isLongType' TLong  = True

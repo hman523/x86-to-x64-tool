@@ -86,3 +86,26 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "struct Node { int *next; int val; }; void foo() { struct Node n; FILE *f; fwrite(&n, sizeof(n), 1, f); int sz; sz = sizeof(int *); }"
             analyzeAlignmentIssues
             3
+
+    describe "nested struct edge cases" $ do
+
+        shouldFlagError
+            "outer struct with pointer and int members is flagged even when a nested struct member is also present"
+            "struct Inner { int z; }; struct Outer { int *p; int x; struct Inner sub; };"
+            checkStructsWithMixedPtrNonPtrMembers
+
+        shouldFlagError
+            "inner struct with pointer and int members is flagged independently of the outer struct"
+            "struct Inner { int *next; int val; }; struct Outer { struct Inner sub; };"
+            checkStructsWithMixedPtrNonPtrMembers
+
+        shouldFlagNIssues
+            "two structs both with mixed pointer/int members produce two issues"
+            "struct A { int *p; int x; }; struct B { char *s; long n; };"
+            checkStructsWithMixedPtrNonPtrMembers
+            2
+
+        shouldNotFlagError
+            "struct with only pointer members is not flagged even when nested struct present"
+            "struct Inner { int y; }; struct Outer { int *p; char *s; };"
+            checkStructsWithMixedPtrNonPtrMembers

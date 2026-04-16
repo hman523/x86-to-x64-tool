@@ -37,6 +37,6 @@ lint ast issues =
         ]
 
     applyModule (cat, linter) (a, unresolved) =
-        let categoryIssues = filter ((== cat) . catagory) issues
+        let categoryIssues = filter ((== cat) . category) issues
             (a', newUnresolved) = linter a categoryIssues
         in (a', unresolved ++ newUnresolved)

@@ -19,6 +19,11 @@ typeSizeSpec = do
     testCheckUIntAsMemSize
     testCheckTypedef
     testMultipleIssues
+    testMultiDeclarator
+    testChainedCasts
+    testTypedefChain
+    testScopedCasts
+    testScopedCastsMultiIssue
 
 testCheckPointerToInt :: Spec
 testCheckPointerToInt = describe "Pointer to Int Casts" $ do
@@ -395,3 +400,244 @@ testMultipleIssues = describe "Multiple Issues (analyzeTypeSizeIssues)" $ do
             , CastLongToPointer
             , UsingUIntAsMemSize
             ]
+
+testMultiDeclarator :: Spec
+testMultiDeclarator = describe "Multi-declarator edge cases" $ do
+
+    shouldFlagNIssues
+        "two pointers in one declaration: both casts to int are flagged"
+        "void f(void) { int *p1 = 0, *p2 = 0; int a = (int)p1; int b = (int)p2; }"
+        analyzeTypeSizeIssues
+        2
+
+    shouldFlagNIssues
+        "two int vars in one declaration: both pointer casts are flagged"
+        "void f(void) { int a = 5, b = 7; int *q = (int*)a; int *r = (int*)b; }"
+        checkIntToPointer
+        2
+
+    shouldFlagNIssues
+        "two pointers in one declaration: both unsigned-int casts are flagged"
+        "void f(void) { int *p1 = 0, *p2 = 0; \
+        \unsigned int a = (unsigned int)p1; unsigned int b = (unsigned int)p2; }"
+        checkPointerToUInt
+        2
+
+testChainedCasts :: Spec
+testChainedCasts = describe "Chained cast edge cases" $ do
+
+    -- (int)(long)ptr — outer int cast looks at a long, not a pointer;
+    -- checkPointerToInt does not fire (long is not a pointer type).
+    -- This is a known limitation: the pointer origin is masked by the
+    -- intermediate (long) step.  The test documents expected behaviour.
+    shouldNotFlagError
+        "(int)(long)ptr: outer cast sees long, not pointer — not flagged by checkPointerToInt"
+        "void f(void *p) { int x = (int)(long)p; }"
+        checkPointerToInt
+
+    shouldFlagError
+        "(int*)long chain: casting long to pointer is flagged by checkLongToPointer"
+        "void f(void) { long x = 5; int *p = (int*)x; }"
+        checkLongToPointer
+
+    shouldFlagError
+        "(int*)long chain: casting long to pointer is flagged by checkLongToPointer"
+        "void f(long x) { int *p = (int*)x; }"
+        checkLongToPointer
+
+testTypedefChain :: Spec
+testTypedefChain = describe "Multi-step typedef chain resolution" $ do
+
+    shouldFlagError
+        "two-step typedef chain resolves to long: (int*)mylong flagged by checkLongToPointer"
+        "typedef long base; typedef base mylong; \
+        \int main() { mylong x = 5; int *ptr = (int*)x; return 0; }"
+        checkLongToPointer
+
+    shouldFlagError
+        "two-step typedef chain resolves to int: (int*)myint flagged by checkIntToPointer"
+        "typedef int base; typedef base myint; \
+        \int main() { myint x = 5; int *ptr = (int*)x; return 0; }"
+        checkIntToPointer
+
+    shouldFlagError
+        "two-step typedef chain resolves to int: (myint)ptr flagged by checkPointerToInt"
+        "typedef int base; typedef base myint; \
+        \int main() { int *ptr = 0; myint x = (myint)ptr; return 0; }"
+        checkPointerToInt
+
+    shouldNotFlagError
+        "two-step typedef chain resolves to long*: (long*)ptr not flagged as int-to-pointer"
+        "typedef long * base; typedef base myptr; \
+        \int main() { int *p = 0; myptr q = (myptr)p; return 0; }"
+        checkIntToPointer
+
+testScopedCasts :: Spec
+testScopedCasts = describe "Scoped cast detection" $ do
+
+    -- The analysis checkers use listify to walk the entire AST, so casts
+    -- in any nested block are found regardless of scope depth.
+
+    describe "casts in nested control-flow blocks" $ do
+
+        shouldFlagError
+            "(int)ptr inside if-block is flagged"
+            "void f(void *p) { if (1) { int x = (int)p; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(int)ptr inside else-block is flagged"
+            "void f(void *p) { if (0) { } else { int x = (int)p; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(int)ptr inside while body is flagged"
+            "void f(void *p) { while (1) { int x = (int)p; break; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(int)ptr inside for-loop body is flagged"
+            "void f(void *p) { for (int i = 0; i < 1; i++) { int x = (int)p; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(int)ptr inside switch case is flagged"
+            "void f(void *p, int n) { switch (n) { case 1: { int x = (int)p; break; } } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(int)ptr inside anonymous nested block is flagged"
+            "void f(void *p) { { { int x = (int)p; } } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "(long*)long inside if-inside-while is flagged"
+            "void f(int c) { while (c) { if (c > 1) { long x = 5; void *p = (void*)x; } } }"
+            checkLongToPointer
+
+    describe "casts across multiple function definitions" $ do
+
+        shouldFlagNIssues
+            "same cast in two different functions counts as two issues"
+            "void f(void *p) { int a = (int)p; } \
+            \void g(void *q) { int b = (int)q; }"
+            checkPointerToInt
+            2
+
+        shouldFlagNIssues
+            "one cast per function: two functions, two issues"
+            "void f(long x) { int *p = (int*)x; } \
+            \void g(long y) { int *q = (int*)y; }"
+            checkLongToPointer
+            2
+
+        shouldFlagError
+            "cast only in the second function is still detected"
+            "void f(void) { } \
+            \void g(void *p) { int x = (int)p; }"
+            checkPointerToInt
+
+    describe "variables declared in inner scope" $ do
+
+        shouldFlagError
+            "pointer declared in if-block, cast in same block, is flagged"
+            "void f(void) { if (1) { int *p = 0; int x = (int)p; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "long declared in for-loop init, cast in body, is flagged"
+            "void f(void) { for (long i = 5; i > 0; i--) { void *p = (void*)i; } }"
+            checkLongToPointer
+
+        shouldNotFlagError
+            "inner-scope pointer variable that is never cast is not flagged"
+            "void f(void) { if (1) { int *p = 0; } }"
+            checkPointerToInt
+
+-- | Multi-issue analysis across scoped/nested contexts.
+testScopedCastsMultiIssue :: Spec
+testScopedCastsMultiIssue = describe "Scoped multi-issue detection" $ do
+
+    -- Two different issue kinds in two different scopes of the same function
+    describe "mixed issue kinds across nested scopes" $ do
+
+        shouldFlagAllTags
+            "ptr-to-int in if-block AND long-to-pointer in else-block both detected"
+            "void f(void *p) { \
+            \if (1) { int x = (int)p; } \
+            \else { long n = 5; void *q = (void*)n; } }"
+            analyzeTypeSizeIssues
+            [CastPointerToInt, CastLongToPointer]
+
+        shouldFlagAllTags
+            "ptr-to-int in outer scope AND ptr-to-uint in nested block both detected"
+            "void f(void *p) { \
+            \int a = (int)p; \
+            \{ unsigned int b = (unsigned int)p; } }"
+            analyzeTypeSizeIssues
+            [CastPointerToInt, CastPointerToUInt]
+
+        shouldFlagAllTags
+            "int-to-pointer in for-body AND ptr-to-int in while-body both detected"
+            "void f(void *p) { \
+            \for (int i = 0; i < 1; i++) { int x = 5; int *q = (int*)x; } \
+            \while (1) { int y = (int)p; break; } }"
+            analyzeTypeSizeIssues
+            [CastIntToPointer, CastPointerToInt]
+
+    -- Each scope has a separate issue; count must be exact
+    describe "issue count across scopes" $ do
+
+        shouldFlagNIssues
+            "one ptr-to-int cast in each of three nested blocks = 3 issues"
+            "void f(void *p) { \
+            \if (1) { int a = (int)p; } \
+            \{ int b = (int)p; } \
+            \{ { int c = (int)p; } } }"
+            checkPointerToInt
+            3
+
+        shouldFlagNIssues
+            "one long-to-pointer per branch of if/else = 2 issues"
+            "void f(int c) { \
+            \if (c) { long x = 1; void *p = (void*)x; } \
+            \else    { long y = 2; void *q = (void*)y; } }"
+            checkLongToPointer
+            2
+
+    -- Issue in a scope that is skipped at runtime but still in the AST
+    describe "dead-code scopes are still analysed" $ do
+
+        shouldFlagError
+            "ptr-to-int cast in unreachable else branch is still flagged"
+            "void f(void *p) { if (0) { int x = (int)p; } }"
+            checkPointerToInt
+
+        shouldFlagError
+            "long-to-pointer in switch default branch is still flagged"
+            "void f(int n) { long x = 3; \
+            \switch (n) { default: { void *p = (void*)x; break; } } }"
+            checkLongToPointer
+
+    -- Each function definition is a separate namespace; issues are not shared
+    describe "issue isolation across function definitions" $ do
+
+        shouldFlagNIssues
+            "three functions each with one ptr-to-int cast = 3 issues total"
+            "void f(void *p) { int a = (int)p; } \
+            \void g(void *q) { int b = (int)q; } \
+            \void h(void *r) { int c = (int)r; }"
+            checkPointerToInt
+            3
+
+        shouldFlagError
+            "issue in a function that comes after a clean function is found"
+            "void clean(void) { int x = 5; } \
+            \void dirty(void *p) { int y = (int)p; }"
+            checkPointerToInt
+
+        shouldNotFlagError
+            "clean function after a dirty one does not re-trigger an issue"
+            "void dirty(void *p) { int y = (int)p; } \
+            \void clean(void) { int x = 5; }"
+            checkLongToPointer
