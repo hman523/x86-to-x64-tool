@@ -1,6 +1,7 @@
 module Parser.Parser where
 
 import Language.C
+import Language.C.System.GCC (newGCC)
 import qualified Data.ByteString.Char8 as BS
 
 -- Parse a bytestring into C code
@@ -15,3 +16,9 @@ parseSourceFile :: FilePath -> IO (Either ParseError CTranslUnit)
 parseSourceFile path = do
     src <- BS.readFile path
     return $ parseC src (initPos path)
+
+-- | Read a file from disk, run the C preprocessor (GCC) on it, then parse.
+--   This supports @#include@ directives and macros.
+parseSourceFileWithCPP :: FilePath -> IO (Either ParseError CTranslUnit)
+parseSourceFileWithCPP path =
+    parseCFile (newGCC "gcc") Nothing [] path

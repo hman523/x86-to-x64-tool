@@ -5,7 +5,7 @@ import System.Exit        (exitFailure)
 import System.IO          (hPutStrLn, hIsTerminalDevice, stderr, stdout)
 import Text.Read          (readMaybe)
 
-import X86_to_X64         (analyzeFile, lintFile, prettyPrintIssues)
+import X86_to_X64         (analyzeFile, lintFile, transformFile, prettyPrintIssues)
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -15,7 +15,8 @@ data Config = Config
     { cfgInputFile  :: FilePath
     , cfgOutputFile :: Maybe FilePath
     , cfgVerbose    :: Bool
-    , cfgLint  :: Bool
+    , cfgLint       :: Bool
+    , cfgTransform  :: Bool
     , cfgNoColor    :: Bool
     } deriving (Show)
 
@@ -24,7 +25,8 @@ defaultConfig = Config
     { cfgInputFile  = ""
     , cfgOutputFile = Nothing
     , cfgVerbose    = False
-    , cfgLint  = False
+    , cfgLint       = False
+    , cfgTransform  = False
     , cfgNoColor    = False
     }
 
@@ -39,11 +41,15 @@ parseArgs args = go args defaultConfig
   where
     go []                cfg
         | null (cfgInputFile cfg) = Left "No input file specified."
+        | cfgLint cfg && cfgTransform cfg
+            = Left "Cannot use -t and -l together."
         | otherwise               = Right cfg
     go ("-h":_)          _   = Left ""
     go ("--help":_)      _   = Left ""
     go ("-v":rest)         cfg = go rest cfg { cfgVerbose   = True  }
-    go ("-l":rest)         cfg = go rest cfg { cfgLint = True  }
+    go ("-l":rest)         cfg = go rest cfg { cfgLint      = True  }
+    go ("-t":rest)         cfg = go rest cfg { cfgTransform = True  }
+    go ("--transform":rest) cfg = go rest cfg { cfgTransform = True  }
     go ("--no-color":rest) cfg = go rest cfg { cfgNoColor   = True  }
     go ("-o":path:rest)  cfg = go rest cfg { cfgOutputFile = Just path }
     go ("-o":[])         _   = Left "-o requires an output file path argument."
@@ -58,9 +64,12 @@ usageMessage = unlines
     , "Options:"
     , "  -v           Verbose: print a one-sentence explanation for each issue"
     , "  -l           Lint: apply automated x86-to-x64 fixes"
-    , "  -o <file>    Write linted source to this file (default: <input>.x64.c)"
+    , "  -t           Transform: rewrite long/unsigned long to fixed-width types"
+    , "  -o <file>    Write output to this file (default: <input>.x64.c)"
     , "  --no-color   Disable colored output"
     , "  -h, --help   Show this help message"
+    , ""
+    , "Note: -t and -l cannot be used together."
     ]
 
 -- ---------------------------------------------------------------------------
@@ -94,7 +103,18 @@ run cfg = do
     isTTY     <- hIsTerminalDevice stdout
     termWidth <- getTermWidth
     let useColor = isTTY && not (cfgNoColor cfg)
-    if cfgLint cfg
+    if cfgTransform cfg
+        then do
+            result <- transformFile (cfgInputFile cfg)
+            case result of
+                Left err  -> hPutStrLn stderr ("Parse error: " ++ err) >> exitFailure
+                Right src -> do
+                    let outPath = case cfgOutputFile cfg of
+                                      Just p  -> p
+                                      Nothing -> cfgInputFile cfg ++ ".x64.c"
+                    writeFile outPath src
+                    putStrLn ("Transformed output written to: " ++ outPath)
+        else if cfgLint cfg
         then do
             result <- lintFile (cfgInputFile cfg)
             case result of

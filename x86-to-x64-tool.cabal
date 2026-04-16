@@ -89,7 +89,18 @@ library
         Linter.PlatformSpecifics,
         Linter.PointerMath,
         Linter.Serialization,
-        Linter.TypeSize
+        Linter.TypeSize,
+        Transformer.Transformer,
+        Transformer.LongReplacement,
+        Transformer.UsageClassifier,
+        Transformer.Helpers,
+        Transformer.StructMemberReplacement,
+        Transformer.TypedefReplacement,
+        Transformer.ReturnTypeReplacement,
+        Transformer.CastSync,
+        Transformer.StandaloneCastFix,
+        Transformer.FunPtrReplacement,
+        Transformer.FormatFix
 
 
     -- Modules included in this library but not exported.
@@ -190,7 +201,11 @@ test-suite x86-to-x64-tool-test
         Linter.PointerMathTests,
         Linter.SerializationTests,
         Linter.TypeSizeTests,
-        Linter.IntegrationTests
+        Linter.IntegrationTests,
+        Transformer.TransformerTests,
+        Transformer.TransformerTestUtils,
+        Transformer.IntegrationTests,
+        CrossArch.CrossArchTests
 
     -- Test dependencies.
     build-depends:
@@ -203,4 +218,7 @@ test-suite x86-to-x64-tool-test
         hspec-contrib,
         syb,
         containers,
-        pretty
+        pretty,
+        process,
+        directory,
+        filepath
