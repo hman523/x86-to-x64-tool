@@ -71,9 +71,10 @@ classifyVar env name funDef =
 --   evidence about how @name@ is used.
 evidenceFromExprNode :: TypeEnv -> String -> CExpression NodeInfo -> [AbstractType]
 evidenceFromExprNode env name expr = case expr of
-    -- Assignment: x = rhs -> evidence from what flows into x
+    -- Assignment: x = rhs -> evidence from what flows into x.
+    -- Use rhsEvidenceFor so that sizeof(x) anywhere in rhs is suppressed.
     CAssign op (CVar (Ident n _ _) _) rhs _
-        | n == name -> rhsEvidence env rhs
+        | n == name -> rhsEvidenceFor n env rhs
                        ++ if isBitwiseAssignOp op then [BitSeqType] else []
 
     -- Bitwise usage: x & e, x | e, x ^ e, x << e, x >> e
@@ -99,7 +100,7 @@ evidenceFromDeclNode env name (CDecl _ declrs _) =
     [ ev
     | (Just (CDeclr (Just (Ident n _ _)) _ _ _ _), Just (CInitExpr initExpr _), _) <- declrs
     , n == name
-    , ev <- rhsEvidence env initExpr
+    , ev <- rhsEvidenceFor n env initExpr
     ]
 evidenceFromDeclNode _ _ _ = []
 
@@ -107,12 +108,34 @@ evidenceFromDeclNode _ _ _ = []
 -- RHS / initializer evidence
 -- ---------------------------------------------------------------------------
 
--- | What abstract type does this expression imply when assigned to a @long@?
-rhsEvidence :: TypeEnv -> CExpression NodeInfo -> [AbstractType]
-rhsEvidence env rhs = case rhs of
-    -- sizeof(expr) or sizeof(type) -> the variable stores a byte count
+-- | What abstract type does this expression imply when assigned to a @long@
+--   variable named @self@?  Any @sizeof(self)@ encountered at any depth is
+--   suppressed: the sizeof value changes when the variable is retyped, so it
+--   must not be treated as 'SizeType' evidence.
+--
+--   This handles all the ways sizeof(x) can nest:
+--     * direct:      @x = sizeof(x)@
+--     * through cast: @x = (long)sizeof(x)@
+--     * through ternary: @x = flag ? sizeof(x) : 0@
+--     * in initializer: @long x = sizeof(x);@
+rhsEvidenceFor :: String -> TypeEnv -> CExpression NodeInfo -> [AbstractType]
+rhsEvidenceFor self env rhs = case rhs of
+    -- sizeof(self) and _Alignof(self) are self-referential: their value
+    -- changes when the variable is retyped, so suppress them entirely.
+    -- sizeof/alignof of *other* expressions or types are legitimate evidence.
+    --
+    -- _Alignof is the only other type-introspective operator in C whose
+    -- compile-time value depends on the declared type of its operand (just
+    -- like sizeof).  All arithmetic/bitwise/comparison operators depend only
+    -- on the runtime value, not the declared type, so they cannot cause the
+    -- same circular-evidence problem.
+    CSizeofExpr  (CVar (Ident n _ _) _) _ | n == self -> []
+    CAlignofExpr (CVar (Ident n _ _) _) _ | n == self -> []
+    -- sizeof(other expr) or sizeof(type) -> variable stores a byte count
     CSizeofExpr _ _  -> [SizeType]
     CSizeofType _ _  -> [SizeType]
+    -- _Alignof does not generate SizeType (or any) evidence: alignment values
+    -- are too small and context-specific to reliably indicate a size_t use.
 
     -- ptr - ptr -> the variable stores a pointer difference
     CBinary CSubOp l r _
@@ -123,11 +146,11 @@ rhsEvidence env rhs = case rhs of
     -- a ptr-diff or a sizeof still carries that evidence)
     CCast _ inner _
         | isPtr (typeOfExpr env inner) -> [PointerType]
-        | otherwise                    -> rhsEvidence env inner
+        | otherwise                    -> rhsEvidenceFor self env inner
 
     -- ternary: classify both branches, take the stronger evidence
     CCond _ thenE elseE _
-        -> concatMap (rhsEvidence env) (maybe [] (:[]) thenE ++ [elseE])
+        -> concatMap (rhsEvidenceFor self env) (maybe [] (:[]) thenE ++ [elseE])
 
     -- any other pointer-typed expression -> holds an address
     _ | isPtr (typeOfExpr env rhs) -> [PointerType]
@@ -139,6 +162,11 @@ rhsEvidence env rhs = case rhs of
 
     -- no recognisable evidence
     _ -> []
+
+-- | Exported wrapper: classify an RHS expression with no variable name in
+--   scope (used by 'ReturnTypeReplacement' and tests).
+rhsEvidence :: TypeEnv -> CExpression NodeInfo -> [AbstractType]
+rhsEvidence = rhsEvidenceFor ""
 
 -- ---------------------------------------------------------------------------
 -- Helpers
