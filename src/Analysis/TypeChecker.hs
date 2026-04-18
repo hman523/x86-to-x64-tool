@@ -145,6 +145,11 @@ typeOfExpr env expr = case expr of
     CUnary CNegOp _ _           -> TInt
     -- Assignment expressions have the type of the lhs
     CAssign _ l _ _             -> typeOfExpr env l
+    -- Function call: look up the function name in env to get its return type.
+    -- Function declarations and definitions are added to the env by
+    -- 'buildGlobalEnv', so e.g. malloc() declared as @void *malloc(size_t)@
+    -- will correctly resolve to TPointer TVoid here.
+    CCall (CVar (Ident n _ _) _) _ _ -> lookupType env n
     -- Comma expression: type of last operand
     CComma exprs _              -> case exprs of
                                        [] -> TUnknown
@@ -175,6 +180,31 @@ typeOfDecl (CDecl specs declrs _) =
                     _                                    -> []
     in resolveType specs derived
 typeOfDecl (CStaticAssert _ _ _) = TUnknown
+
+-- | Record a function definition's name in the TypeEnv, mapped to its
+--   return type.  This lets 'typeOfExpr' resolve the result of a call to
+--   that function via the new 'CCall' case.
+--
+--   For @void *myfunc(int n) { … }@ the return type is @TPointer TVoid@.
+--   'resolveType' already handles this correctly: the @CFunDeclr@ derived
+--   declarator is skipped by the @_ : rest@ fallthrough in 'applyDerived',
+--   so only the pointer (and any other) declarators contribute to the type.
+collectFunDef :: CFunctionDef NodeInfo -> TypeEnv -> TypeEnv
+collectFunDef (CFunDef specs (CDeclr (Just (Ident name _ _)) derived _ _ ni) _ _ _) env =
+    Map.insert name (resolveType specs derived, Just ni) env
+collectFunDef _ env = env
+
+-- | Build a 'TypeEnv' seeded with every file-scope name in the translation
+--   unit: global variable declarations, function prototype declarations, and
+--   function definition names (mapped to their return types).  This seed is
+--   passed to 'buildFunEnv' so that 'typeOfExpr' can resolve function-call
+--   result types (e.g. knowing @malloc@ returns @void *@).
+buildGlobalEnv :: [CExternalDeclaration NodeInfo] -> TypeEnv
+buildGlobalEnv = foldr addExtDecl Map.empty
+  where
+    addExtDecl (CDeclExt decl)   env = collectDecl decl env
+    addExtDecl (CFDefExt funDef) env = collectFunDef funDef env
+    addExtDecl _                 env = env
 
 -- | Predicate helpers used by analysis functions
 isPointer :: CType -> Bool

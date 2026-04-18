@@ -189,17 +189,19 @@ isBitwiseAssignOp op = op `elem` [CAndAssOp, COrAssOp, CXorAssOp, CShlAssOp, CSh
 -- | Classify a global variable by scanning all function bodies in the
 --   translation unit.  Each function contributes evidence; the highest-
 --   priority category across all functions wins.  Falls back to 'NumberType'.
-classifyVarAcrossFuns :: String -> [CFunctionDef NodeInfo] -> AbstractType
-classifyVarAcrossFuns name funDefs =
-    let evidence = concatMap (classifyInFun name) funDefs
+--   @globalEnv@ seeds each per-function TypeEnv so that function-call return
+--   types are resolved correctly by 'typeOfExpr'.
+classifyVarAcrossFuns :: TypeEnv -> String -> [CFunctionDef NodeInfo] -> AbstractType
+classifyVarAcrossFuns globalEnv name funDefs =
+    let evidence = concatMap (classifyInFun globalEnv name) funDefs
     in if null evidence then NumberType
        else foldr1 stronger evidence
 
--- | Classify @name@ within a single function by building its TypeEnv and
---   scanning for usage evidence.
-classifyInFun :: String -> CFunctionDef NodeInfo -> [AbstractType]
-classifyInFun name funDef@(CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
-    let paramEnv = foldr collectDecl Map.empty (concatMap getParams derived)
+-- | Classify @name@ within a single function by building its TypeEnv
+--   (seeded with @globalEnv@) and scanning for usage evidence.
+classifyInFun :: TypeEnv -> String -> CFunctionDef NodeInfo -> [AbstractType]
+classifyInFun globalEnv name funDef@(CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
+    let paramEnv = foldr collectDecl globalEnv (concatMap getParams derived)
         env      = case body of
                      CCompound _ items _ -> buildTypeEnv items paramEnv
                      _                   -> paramEnv

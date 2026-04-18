@@ -30,7 +30,7 @@ import Language.C.Syntax.AST
 import Language.C.Data.Node   (NodeInfo)
 import Language.C.Data.Ident  (Ident(..))
 
-import Analysis.TypeChecker   (TypeEnv, buildTypeEnv, collectDecl)
+import Analysis.TypeChecker   (TypeEnv, buildTypeEnv, collectDecl, buildGlobalEnv)
 import Transformer.Helpers    (typedefSpec, retypeDecl, hasExactlyOneLong,
                                hasUnsignedSpec, isTypeSpec)
 import Transformer.UsageClassifier (AbstractType(..), classifyVar, classifyVarAcrossFuns)
@@ -50,28 +50,31 @@ type RetypeMap = Map.Map String (CDeclarationSpecifier NodeInfo)
 --   recording every variable name that was retyped and the spec it received.
 transformLongs :: CTranslUnit -> (CTranslUnit, RetypeMap)
 transformLongs ast@(CTranslUnit decls _) =
-    let funDefs = [fd | CFDefExt fd <- decls]
-    in foldl (applyToDecl funDefs) (ast, Map.empty) decls
+    let funDefs   = [fd | CFDefExt fd <- decls]
+        globalEnv = buildGlobalEnv decls
+    in foldl (applyToDecl globalEnv funDefs) (ast, Map.empty) decls
 
-applyToDecl :: [CFunctionDef NodeInfo]
+applyToDecl :: TypeEnv
+            -> [CFunctionDef NodeInfo]
             -> (CTranslUnit, RetypeMap)
             -> CExternalDeclaration NodeInfo
             -> (CTranslUnit, RetypeMap)
-applyToDecl _       (ast, rmap) (CFDefExt funDef) = applyToFunDef funDef ast rmap
-applyToDecl funDefs (ast, rmap) (CDeclExt decl)   = applyToGlobalDecl funDefs decl ast rmap
-applyToDecl _       pair _                         = pair
+applyToDecl globalEnv _       (ast, rmap) (CFDefExt funDef) = applyToFunDef globalEnv funDef ast rmap
+applyToDecl globalEnv funDefs (ast, rmap) (CDeclExt decl)   = applyToGlobalDecl globalEnv funDefs decl ast rmap
+applyToDecl _         _       pair _                         = pair
 
 -- ---------------------------------------------------------------------------
 -- Function definitions
 -- ---------------------------------------------------------------------------
 
 -- | Classify and retype @long@ variables local to a function.
-applyToFunDef :: CFunctionDef NodeInfo
+applyToFunDef :: TypeEnv
+              -> CFunctionDef NodeInfo
               -> CTranslUnit
               -> RetypeMap
               -> (CTranslUnit, RetypeMap)
-applyToFunDef funDef ast rmap0 =
-    let env  = buildFunEnv funDef
+applyToFunDef globalEnv funDef ast rmap0 =
+    let env  = buildFunEnv globalEnv funDef
         vars = collectLongVarsInFun funDef
     in foldl (\(a, rm) (name, ni, isU, isCompBase) ->
             let cls     = if isCompBase
@@ -82,12 +85,12 @@ applyToFunDef funDef ast rmap0 =
         ) (ast, rmap0) vars
 
 -- | Build a TypeEnv covering both the explicit parameters and the top-level
---   locals of a function body.  This is used by the classifier to resolve
---   the types of expressions (e.g., knowing that @p@ is @int *@ so that
---   @x = (long)p@ implies 'PointerType').
-buildFunEnv :: CFunctionDef NodeInfo -> TypeEnv
-buildFunEnv (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
-    let paramEnv = foldr collectDecl Map.empty (concatMap getParams derived)
+--   locals of a function body, seeded with @globalEnv@ so that
+--   'typeOfExpr' can resolve file-scope function return types (e.g.
+--   knowing that @malloc@ returns @void *@ when classifying pointer evidence).
+buildFunEnv :: TypeEnv -> CFunctionDef NodeInfo -> TypeEnv
+buildFunEnv globalEnv (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
+    let paramEnv = foldr collectDecl globalEnv (concatMap getParams derived)
     in case body of
         CCompound _ items _ -> buildTypeEnv items paramEnv
         _                   -> paramEnv
@@ -99,14 +102,15 @@ buildFunEnv (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
 -- Global declarations (no function body -> default to NumberType)
 -- ---------------------------------------------------------------------------
 
-applyToGlobalDecl :: [CFunctionDef NodeInfo]
+applyToGlobalDecl :: TypeEnv
+                  -> [CFunctionDef NodeInfo]
                   -> CDeclaration NodeInfo
                   -> CTranslUnit
                   -> RetypeMap
                   -> (CTranslUnit, RetypeMap)
-applyToGlobalDecl funDefs decl ast rmap0 =
+applyToGlobalDecl globalEnv funDefs decl ast rmap0 =
     foldl (\(a, rm) (name, ni, isU, _) ->
-               let cls     = classifyVarAcrossFuns name funDefs
+               let cls     = classifyVarAcrossFuns globalEnv name funDefs
                    newSpec = toSpec isU cls
                in (retypeDecl ni newSpec a, Map.insert name newSpec rm))
           (ast, rmap0)

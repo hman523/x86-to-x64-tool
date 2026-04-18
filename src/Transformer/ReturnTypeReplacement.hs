@@ -27,6 +27,7 @@ import Data.Generics           (listify)
 import Language.C.Syntax.AST
 import Language.C.Data.Node    (NodeInfo)
 import Language.C.Data.Ident   (Ident(..))
+import Analysis.TypeChecker    (TypeEnv, buildGlobalEnv)
 import Transformer.Helpers     (retypeFunReturnType, retypeDecl,
                                 hasExactlyOneLong, hasUnsignedSpec, isTypeSpec)
 import Transformer.LongReplacement
@@ -39,20 +40,21 @@ import Transformer.UsageClassifier
 --   matching forward declarations (prototypes) to keep them consistent.
 transformReturnTypes :: CTranslUnit -> CTranslUnit
 transformReturnTypes ast@(CTranslUnit decls _) =
-    let ast' = foldl applyToDecl ast decls
+    let globalEnv = buildGlobalEnv decls
+        ast'      = foldl (applyToDecl globalEnv) ast decls
     in ast'
 
-applyToDecl :: CTranslUnit -> CExternalDeclaration NodeInfo -> CTranslUnit
-applyToDecl ast (CFDefExt funDef) = applyToFunDef funDef ast
-applyToDecl ast _                 = ast
+applyToDecl :: TypeEnv -> CTranslUnit -> CExternalDeclaration NodeInfo -> CTranslUnit
+applyToDecl globalEnv ast (CFDefExt funDef) = applyToFunDef globalEnv funDef ast
+applyToDecl _         ast _                 = ast
 
 -- | If the function's declared return type is @long@ or @unsigned long@,
 --   classify the return value, retype the function header, and update any
 --   matching forward declarations (prototypes) in the same translation unit.
-applyToFunDef :: CFunctionDef NodeInfo -> CTranslUnit -> CTranslUnit
-applyToFunDef funDef@(CFunDef specs (CDeclr mIdent _ _ _ dNi) _ _ _) ast
+applyToFunDef :: TypeEnv -> CFunctionDef NodeInfo -> CTranslUnit -> CTranslUnit
+applyToFunDef globalEnv funDef@(CFunDef specs (CDeclr mIdent _ _ _ dNi) _ _ _) ast
     | hasExactlyOneLong specs =
-        let cls     = classifyReturnType funDef
+        let cls     = classifyReturnType globalEnv funDef
             newSpec = toSpec (hasUnsignedSpec specs) cls
             ast'    = retypeFunReturnType dNi newSpec ast
         in case mIdent of
@@ -89,9 +91,9 @@ retypePrototypes funName newSpec (CTranslUnit decls ni) =
 -- | Classify the return type of a function by scanning all its @return@
 --   statements and taking the highest-priority category.  Falls back to
 --   'NumberType' when no evidence is found.
-classifyReturnType :: CFunctionDef NodeInfo -> AbstractType
-classifyReturnType funDef@(CFunDef _ _ _ body _) =
-    let env    = buildFunEnv funDef
+classifyReturnType :: TypeEnv -> CFunctionDef NodeInfo -> AbstractType
+classifyReturnType globalEnv funDef@(CFunDef _ _ _ body _) =
+    let env    = buildFunEnv globalEnv funDef
         retExprs = [ e | CReturn (Just e) _ <- listify isReturn body ]
         evidence = concatMap (rhsEvidence env) retExprs
     in if null evidence then NumberType

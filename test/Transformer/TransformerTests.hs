@@ -910,3 +910,30 @@ transformerSpec = describe "Transformer" $ do
             "long with only literal assignments across both branches -> int32_t"
             "void f(int c) { long x; if (c) { x = 1; } else { x = 2; } }"
             "int32_t"
+
+    -- -------------------------------------------------------------------
+    -- CCall return-type evidence: function declared to return a pointer
+    --   A long variable assigned from (long)fn() where fn returns void* or
+    --   any other pointer type must be classified PointerType -> intptr_t,
+    --   not fall through to NumberType -> int32_t.
+    -- -------------------------------------------------------------------
+    describe "long assigned from function returning pointer" $ do
+        shouldTransformToContain
+            "long x = (long)fn() where fn: void* -> void* becomes intptr_t"
+            "void *get(void); void f(void) { long x = (long)get(); }"
+            "intptr_t"
+
+        shouldTransformNotToContain
+            "long x = (long)fn() where fn: void* -> void*: no int32_t"
+            "void *get(void); void f(void) { long x = (long)get(); }"
+            "int32_t"
+
+        shouldTransformToContain
+            "long x = (long)fn() where fn defined in same TU -> intptr_t"
+            "void *get(void) { return 0; } void f(void) { long x = (long)get(); }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "global long assigned from (long)fn() returning int* -> intptr_t"
+            "int *alloc(void); long g; void f(void) { g = (long)alloc(); }"
+            "intptr_t"
