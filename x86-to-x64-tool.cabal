@@ -143,7 +143,8 @@ executable x86-to-x64-tool
     -- Other library packages from which modules are imported.
     build-depends:
         base ^>=4.18.3.0,
-        x86-to-x64-tool
+        x86-to-x64-tool,
+        array
 
     -- Directories containing source files.
     hs-source-dirs:   app
