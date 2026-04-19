@@ -212,7 +212,7 @@ instance Show Issue where
         ++ " at " ++ show (issuePos i)
 
 -- ---------------------------------------------------------------------------
--- ANSI colour helpers
+-- ANSI color helpers
 -- ---------------------------------------------------------------------------
 
 ansi :: Bool -> String -> String -> String

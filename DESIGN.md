@@ -267,7 +267,7 @@ data Category
 (~70 constructors total).  `getCategory` maps each tag to its `Category`.
 
 The `prettyPrintIssues` function renders a list of issues to a terminal-width-
-aware, optionally colour-coded, optionally verbose string suitable for display.
+aware, optionally color-coded, optionally verbose string suitable for display.
 
 ### 5.4 Analysis Orchestrator
 
@@ -586,6 +586,7 @@ data Config = Config
   , cfgNoColor    :: Bool
   , cfgCPP        :: Bool
   , cfgStrict     :: Bool
+  , cfgDiff       :: Bool
   }
 ```
 
@@ -594,8 +595,22 @@ library is used.  The flag `-h`/`--help` returns `Left ""` (signals a clean
 exit), while unknown or conflicting flags return `Left errMsg` (signals an
 error exit).
 
+**Flags summary:**
+
+| Flag | Description |
+|---|---|
+| `-v` | Print a one-sentence explanation for each detected issue |
+| `-l` | Lint mode: apply automated fixes, report unresolved issues |
+| `-t` / `--transform` | Transform mode: rewrite `long` to fixed-width types |
+| `-o <file>` | Write output to `<file>` instead of `<input>.x64.c` |
+| `--cpp` / `-cpp` | Run the C preprocessor before parsing |
+| `--strict` | Exit non-zero on any issue, including warnings |
+| `--no-color` | Disable all ANSI color output |
+| `--diff` | Print a human-readable colored diff to stdout (use with `-t` or `-l`) |
+| `-h` / `--help` | Show usage and exit |
+
 **Output formatting:**
-- Colour is enabled if stdout is a TTY and `--no-color` was not passed.
+- Color is enabled if stdout is a TTY and `--no-color` was not passed.
 - Terminal width is read from the `COLUMNS` environment variable (set by
   zsh/bash), falling back to 80 columns.
 - `--strict` causes the process to exit with a non-zero status even for
@@ -606,8 +621,29 @@ error exit).
 ```
 run cfg
   ├── cfgTransform → transformFile/transformFileWithCPP → write .x64.c
+  │                  └── [--diff] printDiff originalSrc transformedSrc
   ├── cfgLint      → lintFile/lintFileWithCPP → write .x64.c + report unresolved
+  │                  └── [--diff] printDiff originalSrc lintedSrc
   └── (default)    → analyzeFile/analyzeFileWithCPP → print issues
+```
+
+### 9.1 Diff Display (`--diff`)
+
+When `--diff` is passed alongside `-t` or `-l`, the tool reads the original
+source from disk and passes it together with the transformed/linted output
+string to `printDiff`.  The diff is printed to stdout after the "written to"
+confirmation line.
+
+**Output format** (unified-diff style with two line-number columns):
+
+```
+--- original.c
++++ original.c.x64.c
+@@ -4,3 +4,3 @@
+ 3  3   struct S {
+ 4    -     long  x;          ← removed token bolded in red
+    4 +     int32_t x;        ← added token bolded in green
+ 5  5   };
 ```
 
 ---

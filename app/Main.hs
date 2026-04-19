@@ -278,8 +278,8 @@ tokenize (c:cs)
 
 -- | Compare two lines token-by-token and annotate changed tokens with ANSI
 --   bold (ESC[1m) / normal-weight (ESC[22m).  ESC[22m turns off bold without
---   resetting the current colour, so the caller can wrap the whole line in a
---   colour code and bold will show through cleanly.
+--   resetting the current color, so the caller can wrap the whole line in a
+--   color code and bold will show through cleanly.
 intraLineDiff :: Bool -> String -> String -> (String, String)
 intraLineDiff False old new_ = (old, new_)
 intraLineDiff True  old new_ =
