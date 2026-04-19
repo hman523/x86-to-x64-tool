@@ -1,4 +1,11 @@
-module Analysis.PlatformSpecifics where
+module Analysis.PlatformSpecifics
+  ( analyzePlatformSpecificIssues
+  , checkInlineAsmWithx86Instructions
+  , checkAsmBlocks
+  , checkHandleTypesCastToInt
+  , checkx86SpecificCompilerIntrinsics
+  , checkAssumptionsAboutRegSizes
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (getCInteger, CString(..))
@@ -8,6 +15,7 @@ import Data.List (isPrefixOf, isInfixOf)
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (handleTypes, intrinsicPrefixes)
 import qualified Data.Map as Map
 
 analyzePlatformSpecificIssues :: CTranslUnit -> [Issue]
@@ -47,14 +55,14 @@ walkAllStmts f (CTranslUnit decls _) = concatMap checkTop decls
 
 -- | Flag any inline assembly block.
 checkAsmBlocks :: CTranslUnit -> [Issue]
-checkAsmBlocks ast = walkAllStmts checkStmt ast
+checkAsmBlocks = walkAllStmts checkStmt
   where
     checkStmt (CAsm _ info) = [createIssue info Critical AsmBlocks]
     checkStmt _             = []
 
 -- | Flag inline asm containing x86 register names (eax, ebx, ecx, edx, etc.).
 checkInlineAsmWithx86Instructions :: CTranslUnit -> [Issue]
-checkInlineAsmWithx86Instructions ast = walkAllStmts checkStmt ast
+checkInlineAsmWithx86Instructions = walkAllStmts checkStmt
   where
     checkStmt (CAsm (CAsmStmt _ asmStr _ _ _ _) info) =
         let str = getAsmStr asmStr
@@ -76,18 +84,13 @@ checkHandleTypesCastToInt ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo    = resolveTypedef tenv (typeOfDecl castDecl)
-            innerType = typeOfExpr env inner
+            innerType = peelCastType env inner
         in case innerType of
             TTypedef name | name `elem` handleTypes ->
                 if isIntType' castTo      then [createIssue info Warning HandleTypesCastToInt]
-                else if isUIntType castTo then [createIssue info Warning HandleTypesCastToUInt]
-                else []
+                else [createIssue info Warning HandleTypesCastToUInt | isUIntType castTo]
             _ -> []
     checkCast _ _ _ = []
-
-    handleTypes :: [String]
-    handleTypes = ["HANDLE", "HMODULE", "HWND", "HINSTANCE"
-                  , "HKEY", "HDC", "HBITMAP", "SOCKET", "HANDLE_PTR"]
 
 -- | Flag calls to x86-specific SIMD / compiler intrinsics.
 checkx86SpecificCompilerIntrinsics :: CTranslUnit -> [Issue]
@@ -98,9 +101,6 @@ checkx86SpecificCompilerIntrinsics (CTranslUnit decls _) =
         [ createIssue info Warning X86SpecificCompilerIntrinsics
         | any (`isPrefixOf` name) intrinsicPrefixes ]
     checkExpr _ _ = []
-
-    intrinsicPrefixes :: [String]
-    intrinsicPrefixes = ["_mm_", "_mm256_", "_mm512_", "__mm", "_m_", "__builtin_ia32"]
 
 -- | Flag comparisons of sizeof(T) with the literal 4 (assumes 32-bit register size).
 checkAssumptionsAboutRegSizes :: CTranslUnit -> [Issue]

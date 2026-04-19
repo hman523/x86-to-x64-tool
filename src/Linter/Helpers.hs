@@ -1,16 +1,38 @@
-module Linter.Helpers where
+module Linter.Helpers
+  ( unlintable
+  , dispatchLinter
+  , typedefSpec
+  , replaceCastType
+  , replaceCastTypeCollapsing
+  , retypeDecl
+  , wrapReturnExpr
+  , replaceVaArgType
+  ) where
 
 import Data.Generics (everywhere, mkT)
 import Language.C.Syntax.AST
 import Language.C.Data.Node (NodeInfo, undefNode)
 import Language.C.Data.Ident (Ident(..))
 import Language.C.Data.Position (posOf)
-import Analysis.IssueTypes (Issue)
+import Analysis.IssueTypes (Issue(..), IssueTag)
 
 -- | Identity lint: leave the AST unchanged and report the issue
 --   as unresolved. Use this for issues that cannot be automatically fixed.
 unlintable :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 unlintable ast issue = (ast, Just issue)
+
+-- | Fold over a list of issues, dispatching each to the appropriate handler
+--   via a user-supplied lookup.  Issues whose tag is not handled are left
+--   unresolved.
+dispatchLinter :: (IssueTag -> Maybe (CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)))
+               -> CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
+dispatchLinter lookupHandler ast0 = foldl applyOne (ast0, [])
+  where
+    applyOne (a, unresolved) issue =
+      case lookupHandler (issueType issue) of
+        Just handler -> let (a', mi) = handler a issue
+                        in  (a', maybe unresolved (: unresolved) mi)
+        Nothing      -> (a, issue : unresolved)
 
 -- | Build a single typedef-name type specifier, e.g. @typedefSpec "intptr_t"@.
 typedefSpec :: String -> CDeclarationSpecifier NodeInfo
@@ -32,6 +54,26 @@ replaceCastType targetInfo newSpec = everywhere (mkT fixCast)
         | posOf info == posOf targetInfo
         = CCast (CDecl [newSpec] declrs ni) inner info
     fixCast e = e
+
+-- | Like 'replaceCastType' but also collapses one level of intermediate
+--   cast, so that @(int)(long)ptr@ becomes @(newSpec)ptr@ rather than
+--   @(newSpec)(long)ptr@.  Use this when the issue was detected by peeling
+--   through an intermediate cast and the intermediate cast is now redundant.
+replaceCastTypeCollapsing
+    :: NodeInfo
+    -> CDeclarationSpecifier NodeInfo
+    -> CTranslUnit
+    -> CTranslUnit
+replaceCastTypeCollapsing targetInfo newSpec = everywhere (mkT fixCast)
+  where
+    fixCast :: CExpression NodeInfo -> CExpression NodeInfo
+    fixCast (CCast (CDecl _ declrs ni) inner info)
+        | posOf info == posOf targetInfo
+        = CCast (CDecl [newSpec] declrs ni) (stripOneCast inner) info
+    fixCast e = e
+
+    stripOneCast (CCast _ e _) = e
+    stripOneCast e             = e
 
 -- | Walk the AST and, at any CDecl containing a declarator whose NodeInfo
 --   matches the target position, replace all its type specifiers with the

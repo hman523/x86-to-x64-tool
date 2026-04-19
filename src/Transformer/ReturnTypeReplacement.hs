@@ -81,7 +81,7 @@ retypePrototypes funName newSpec (CTranslUnit decls ni) =
         = n == name && any isFunDeclr derived
     isFunProto _ _ = False
 
-    isFunDeclr (CFunDeclr _ _ _) = True
+    isFunDeclr (CFunDeclr {}) = True
     isFunDeclr _                 = False
 
 -- ---------------------------------------------------------------------------

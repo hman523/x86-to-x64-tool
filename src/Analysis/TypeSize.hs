@@ -1,4 +1,15 @@
-module Analysis.TypeSize where 
+module Analysis.TypeSize
+  ( analyzeTypeSizeIssues
+  , checkPointerToInt
+  , checkPointerToUInt
+  , checkIntToPointer
+  , checkLongToPointer
+  , checkSizeOfInt
+  , checkSizeOfLong
+  , checkIntAsSizet
+  , checkIntAsPtrdifft
+  , checkUIntAsMemSize
+  ) where 
 
 import Language.C.Syntax.AST
 import Language.C.Data.Node
@@ -6,6 +17,7 @@ import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (allocFns)
 import qualified Data.Map as Map
 
 
@@ -26,6 +38,9 @@ analyzeTypeSizeIssues ast =
 -- ---------------------------------------------------------------------------
 
 -- | Helper: build a cast checker from a predicate on (castTo, castFrom) types.
+--   The @castFrom@ type is determined by peeling through any intermediate
+--   cast expressions, so that chains like @(int)(long)ptr@ are correctly
+--   recognised as a pointer-to-int cast rather than a long-to-int cast.
 castChecker :: (CType -> CType -> Bool) -> IssueTag -> CTranslUnit -> [Issue]
 castChecker predicate tag ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
@@ -33,7 +48,7 @@ castChecker predicate tag ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo   = resolveTypedef tenv (typeOfDecl castDecl)
-            castFrom = resolveTypedef tenv (typeOfExpr env inner)
+            castFrom = resolveTypedef tenv (peelCastType env inner)
         in [createIssue info Critical tag | predicate castTo castFrom]
     checkCast _ _ _ = []
 
@@ -116,9 +131,8 @@ checkIntAsSizet ast@(CTranslUnit decls _) =
                 mDeclPos = case lhs of
                     CVar (Ident name _ _) _ -> lookupDeclPos env name
                     _                       -> Nothing
-            in if isSizetType lhsType && isIntType' rhsType
-               then [createIssueWithDecl info mDeclPos Warning UsingIntAsSizet]
-               else []
+            in [createIssueWithDecl info mDeclPos Warning UsingIntAsSizet
+               | isSizetType lhsType && isIntType' rhsType]
         _ -> []
 
     -- size_t is typically an unsigned long on x64
@@ -139,9 +153,8 @@ checkIntAsPtrdifft ast@(CTranslUnit decls _) =
                 mDeclPos = case lhs of
                     CVar (Ident name _ _) _ -> lookupDeclPos env name
                     _                       -> Nothing
-            in if isPtrdifftType lhsType && isIntType' rhsType
-               then [createIssueWithDecl info mDeclPos Warning UsingIntAsPtrdifft]
-               else []
+            in [createIssueWithDecl info mDeclPos Warning UsingIntAsPtrdifft
+               | isPtrdifftType lhsType && isIntType' rhsType]
         _ -> []
 
     -- ptrdiff_t is typically a signed long on x64
@@ -156,7 +169,7 @@ checkUIntAsMemSize ast@(CTranslUnit decls _) =
   where
     checkAlloc tenv env expr = case expr of
         CCall (CVar (Ident fname _ _) _) args info
-            | fname `elem` ["malloc", "calloc", "realloc"] ->
+            | fname `elem` allocFns ->
                 [ createIssueWithDecl info mDeclPos Warning UsingUIntAsMemSize
                 | arg <- args
                 , let t = resolveTypedef tenv (typeOfExpr env arg)

@@ -1,16 +1,24 @@
-module Analysis.Serialization where
+module Analysis.Serialization
+  ( analyzeSerializationIssues
+  , checkWritingPtrDirectToFile
+  , checkWritingPtrContainingStructsToFiles
+  , checkSendingPtrsOverNetwork
+  , checkPtrInMemoryMappedFiles
+  , checkPtrInSharedMemory
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (ioWriteFns, networkSendFns)
 import qualified Data.Map as Map
 
 analyzeSerializationIssues :: CTranslUnit -> [Issue]
 analyzeSerializationIssues ast =
     checkWritingPtrDirectToFile ast
-    ++ checkWritingPtrContrainingStructsToFiles ast
+    ++ checkWritingPtrContainingStructsToFiles ast
     ++ checkSendingPtrsOverNetwork ast
     ++ checkPtrInMemoryMappedFiles ast
     ++ checkPtrInSharedMemory ast
@@ -27,7 +35,7 @@ checkWritingPtrDirectToFile ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkWrite tenv) Map.empty) decls
   where
     checkWrite tenv env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["fwrite", "write"], length args >= 1 =
+        | fname `elem` ioWriteFns, not (null args) =
             let bufType = resolveTypedef tenv (typeOfExpr env (head args))
             in [ createIssue info Critical WritingPtrDirectToFile
                | isPtrToPtr bufType ]
@@ -37,15 +45,15 @@ checkWritingPtrDirectToFile ast@(CTranslUnit decls _) =
     isPtrToPtr _                        = False
 
 -- | Flag fwrite/write where the buffer is an address of a struct with pointer members.
-checkWritingPtrContrainingStructsToFiles :: CTranslUnit -> [Issue]
-checkWritingPtrContrainingStructsToFiles ast@(CTranslUnit decls _) =
+checkWritingPtrContainingStructsToFiles :: CTranslUnit -> [Issue]
+checkWritingPtrContainingStructsToFiles ast@(CTranslUnit decls _) =
     let senv = buildStructEnv ast
     in concatMap (analyzeDecl (checkWrite senv) Map.empty) decls
   where
     checkWrite senv env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["fwrite", "write"], length args >= 1 =
+        | fname `elem` ioWriteFns, not (null args) =
             let bufType = typeOfExpr env (head args)
-            in [ createIssue info Critical WritingPtrContrainingStructsToFiles
+            in [ createIssue info Critical WritingPtrContainingStructsToFiles
                | ptrToStructWithPtrs senv bufType ]
     checkWrite _ _ _ = []
 
@@ -57,7 +65,7 @@ checkSendingPtrsOverNetwork ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkSend tenv senv) Map.empty) decls
   where
     checkSend tenv senv env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["send", "sendto"], length args >= 2 =
+        | fname `elem` networkSendFns, length args >= 2 =
             let bufType = typeOfExpr env (args !! 1)
                 bufTypeR = resolveTypedef tenv bufType
             in [ createIssue info Critical SendingPtrsOverNetwork
@@ -97,11 +105,3 @@ checkPtrInSharedMemory (CTranslUnit decls _) =
             [createIssue info Warning PtrInSharedMemory]
     checkShmCall _ _ = []
 
--- ---------------------------------------------------------------------------
--- Shared helper
--- ---------------------------------------------------------------------------
-
--- | True when @t@ is TPointer (TStruct name) and that struct has pointer members.
-ptrToStructWithPtrs :: StructEnv -> CType -> Bool
-ptrToStructWithPtrs senv (TPointer (TStruct name)) = structHasPointer senv name
-ptrToStructWithPtrs _ _                             = False

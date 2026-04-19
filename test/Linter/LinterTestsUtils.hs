@@ -66,6 +66,23 @@ shouldLintTo name code analyser linter expected =
         let (ast', _) = linter ast issues
         render (pretty ast') `shouldContain` expected
 
+-- | Assert that the linted output does NOT contain the given substring.
+shouldLintNotTo
+  :: String
+  -> String
+  -> (CTranslUnit -> [Issue])
+  -> (CTranslUnit -> [Issue] -> (CTranslUnit, [Issue]))
+  -> String                                             -- ^ absent substring
+  -> Spec
+shouldLintNotTo name code analyser linter absent =
+  it name $ do
+    case parseSourceString code of
+      Left err  -> fail (show err)
+      Right ast -> do
+        let issues = analyser ast
+        let (ast', _) = linter ast issues
+        render (pretty ast') `shouldNotContain` absent
+
 -- | Assert that the linter leaves exactly the listed tags unresolved
 -- (order-insensitive).
 shouldLeaveUnresolved

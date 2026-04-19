@@ -15,6 +15,18 @@ shouldFlagError testName code checker =
         let issues = checker ast
         length issues `shouldSatisfy` (> 0)
 
+-- | Like 'shouldFlagError' but also asserts that at least one issue carries
+--   the expected 'IssueTag'.
+shouldFlagErrorWithTag :: String -> String -> (CTranslUnit -> [Issue]) -> IssueTag -> Spec
+shouldFlagErrorWithTag testName code checker tag =
+  it testName $ do
+    case parseSourceString code of
+      Left err -> fail $ show err
+      Right ast -> do
+        let issues = checker ast
+        length issues `shouldSatisfy` (> 0)
+        map issueType issues `shouldContain` [tag]
+
 shouldNotFlagError :: String -> String -> (CTranslUnit -> [Issue]) -> Spec
 shouldNotFlagError testName code checker =
   it testName $ do
@@ -80,8 +92,10 @@ shouldFlagExactTags testName code checker expectedTags =
         let foundTags = map issueType (checker ast)
         sort (map show foundTags) `shouldBe` sort (map show expectedTags)
 
--- | Helper to parse a C snippet, failing hard on parse error
+-- | Helper to parse a C snippet, failing hard on parse error.
+--   Prefer using 'shouldFlagError' or 'shouldNotFlagError' which handle
+--   parse failures gracefully within HSpec expectations.
 parseSrc :: String -> CTranslUnit
 parseSrc src = case parseSourceString src of
-    Left err  -> error $ "Parse error: " ++ show err
+    Left err  -> error $ "Parse error in test helper: " ++ show err
     Right ast -> ast

@@ -87,12 +87,19 @@ platformSpecificsSpec = describe "PlatformSpecifics Analysis" $ do
             "typedef void* HANDLE; void foo() { HANDLE h; int x = (int)h; }"
             checkHandleTypesCastToInt
 
-        shouldFlagError
-            "flags HANDLE cast to unsigned int"
+        shouldFlagErrorWithDetails
+            "flags HANDLE cast to unsigned int as HandleTypesCastToUInt"
             "typedef void* HANDLE; void foo() { HANDLE h; unsigned int x = (unsigned int)h; }"
             checkHandleTypesCastToInt
+            HandleTypesCastToUInt
+            Nothing
 
         shouldNotFlagError
             "does not flag HANDLE cast to void* (correct fix direction)"
             "typedef void* HANDLE; void foo() { HANDLE h; void *x = (void*)h; }"
+            checkHandleTypesCastToInt
+
+        shouldFlagError
+            "chained cast: (int)(long)HANDLE still detected"
+            "typedef void* HANDLE; void foo() { HANDLE h; int x = (int)(long)h; }"
             checkHandleTypesCastToInt

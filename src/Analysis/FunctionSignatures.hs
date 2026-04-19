@@ -1,4 +1,10 @@
-module Analysis.FunctionSignatures where
+module Analysis.FunctionSignatures
+  ( analyzeFunctionSignatureIssues
+  , checkFnsReturnPtrAsInt
+  , checkFnsReturnPtrAsLong
+  , checkFnsParamDeclaredAsIntTakesPtr
+  , checkVaargUsingWrongTypesForPtrArgs
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Node
@@ -132,6 +138,5 @@ checkVaargUsingWrongTypesForPtrArgs ast@(CTranslUnit decls _) =
     checkVaArg tenv _env (CBuiltinExpr (CBuiltinVaArg _ decl info)) =
         let t = resolveTypedef tenv (typeOfDecl decl)
         in if isIntType' t      then [createIssue info Warning VaargUsingWrongTypesForPtrArgs]
-           else if isUIntType t then [createIssue info Warning VaargUsingWrongTypesForPtrArgsUInt]
-           else []
+           else [createIssue info Warning VaargUsingWrongTypesForPtrArgsUInt | isUIntType t]
     checkVaArg _ _ _ = []

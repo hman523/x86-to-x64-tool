@@ -45,7 +45,7 @@ integrationSpec = do
             "mixed-member struct, fwrite of ptr-to-ptr, fwrite of struct with ptr, and send of ptr-to-ptr all flagged"
             "struct Record { int *data; int len; }; void foo() { int **pp; FILE *f; fwrite(pp, sizeof(*pp), 1, f); struct Record r; fwrite(&r, sizeof(r), 1, f); int sock; send(sock, pp, sizeof(*pp), 0); }"
             analysis
-            [StructsWithMixedPtrNonPtrMembers, WritingPtrDirectToFile, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork]
+            [StructsWithMixedPtrNonPtrMembers, WritingPtrDirectToFile, WritingPtrContainingStructsToFiles, SendingPtrsOverNetwork]
 
         shouldFlagAtLeastNIssues
             "type-unsafe serializer triggers at least four issues"
@@ -136,7 +136,7 @@ integrationSpec = do
             "mixed-member struct, ptr diff to int, multiply overflow malloc, fwrite of struct with ptr, send of struct with ptr, sizeof to int, and ptr vs literal all flagged"
             "struct Node { int *next; int val; }; void foo() { int *start; int *end; int diff; diff = end - start; int n; int m; char *buf = malloc(n * m); struct Node nd; FILE *f; fwrite(&nd, sizeof(nd), 1, f); int sock; send(sock, &nd, sizeof(nd), 0); int sz; sz = sizeof(int *); int *p; if (p < 100) { } }"
             analysis
-            [StructsWithMixedPtrNonPtrMembers, PtrDiffStoredAs32bit, AllocationSizeCalcsMayOverflow, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork, SizeofStoredin32bits, PtrComparisonWithIntConsts]
+            [StructsWithMixedPtrNonPtrMembers, PtrDiffStoredAs32bit, AllocationSizeCalcsMayOverflow, WritingPtrContainingStructsToFiles, SendingPtrsOverNetwork, SizeofStoredIn32Bits, PtrComparisonWithIntConsts]
 
         shouldFlagAtLeastNIssues
             "struct serialization pipeline triggers at least seven issues"
@@ -151,7 +151,7 @@ integrationSpec = do
               [ StructsWithMixedPtrNonPtrMembers
               , UnionsContainingPtrAndInts
               , StructContainingPtrWrittenToBinFile
-              , SizeofStoredin32bits
+              , SizeofStoredIn32Bits
               , HardCodedStructSizes
               , PackingPtrsWithFlagsInInt
               , BitShiftsOnPtr
@@ -179,7 +179,7 @@ integrationSpec = do
               , PtrSubUnderflow
               , ArrayIndexingIntInArrayOver2tothe31size
               , WritingPtrDirectToFile
-              , WritingPtrContrainingStructsToFiles
+              , WritingPtrContainingStructsToFiles
               , SendingPtrsOverNetwork
               , PtrInSharedMemory
               , CastPointerToInt

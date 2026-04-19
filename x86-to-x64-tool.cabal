@@ -59,12 +59,14 @@ library
     import:           warnings
 
     -- Modules exported by the library.
+    -- All modules are exposed so that the test suite can import them directly.
     exposed-modules:  
         X86_to_X64,
         Parser.Parser,
         Parser.FormatSpecParser,
         Analysis.Analysis,
         Analysis.IssueTypes,
+        Analysis.KnownFunctions,
         Analysis.ASTTraversal,
         Analysis.TypeChecker,
         Analysis.Alignment,
@@ -102,7 +104,6 @@ library
         Transformer.StandaloneCastFix,
         Transformer.FunPtrReplacement,
         Transformer.FormatFix
-
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -174,6 +175,7 @@ test-suite x86-to-x64-tool-test
 
     other-modules:    
         Parser.ParserTests,
+        Parser.FormatSpecParserTests,
         Analysis.AnalysisTests,
         Analysis.TypeSizeTests,
         Analysis.TypeCheckerTests,
@@ -206,6 +208,7 @@ test-suite x86-to-x64-tool-test
         Transformer.TransformerTests,
         Transformer.TransformerTestUtils,
         Transformer.IntegrationTests,
+        Transformer.UsageClassifierTests,
         CrossArch.CrossArchTests
 
     -- Test dependencies.

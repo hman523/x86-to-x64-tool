@@ -1,4 +1,10 @@
-module Analysis.PointerMath where
+module Analysis.PointerMath
+  ( analyzePointerMathIssues
+  , checkPtrDiffStoredAs32bit
+  , checkPtrAddOverflow
+  , checkPtrSubUnderflow
+  , checkArrayIndexingIntInArrayOver2tothe31size
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Ident

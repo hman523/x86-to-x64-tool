@@ -14,8 +14,11 @@ module Transformer.FunPtrReplacement
     ) where
 
 import Data.Generics          (everywhere, mkT)
+import Data.Char              (toLower)
+import Data.List              (isInfixOf)
 import Language.C.Syntax.AST
 import Language.C.Data.Node   (NodeInfo)
+import Language.C.Data.Ident  (Ident(..))
 
 import Transformer.Helpers         (typedefSpec, hasExactlyOneLong, hasUnsignedSpec,
                                     isTypeSpec)
@@ -34,9 +37,23 @@ transformFunPtrParams = everywhere (mkT fixDerivedDeclr)
     fixParam :: CDeclaration NodeInfo -> CDeclaration NodeInfo
     fixParam (CDecl specs declrs ni)
         | hasExactlyOneLong specs =
-            let newSpec  = typedefSpec (if hasUnsignedSpec specs
-                                        then "uint32_t"
-                                        else "int32_t")
+            let isUnsigned = hasUnsignedSpec specs
+                usePtr     = any paramLooksLikePtr declrs
+                newSpec    = typedefSpec $ case (usePtr, isUnsigned) of
+                    (True,  True)  -> "uintptr_t"
+                    (True,  False) -> "intptr_t"
+                    (False, True)  -> "uint32_t"
+                    (False, False) -> "int32_t"
                 newSpecs = newSpec : filter (not . isTypeSpec) specs
             in CDecl newSpecs declrs ni
     fixParam d = d
+
+    -- | Heuristic: a function-pointer parameter "looks like" it carries a
+    --   pointer value if the parameter name contains ptr/handle/addr
+    --   substrings (case-insensitive).  Without full call-site analysis this
+    --   is the best we can do for function-pointer declarators.
+    paramLooksLikePtr :: (Maybe (CDeclarator NodeInfo), Maybe (CInitializer NodeInfo), Maybe (CExpression NodeInfo)) -> Bool
+    paramLooksLikePtr (Just (CDeclr (Just (Ident n _ _)) _ _ _ _), _, _) =
+        let lower = map toLower n
+        in any (`isInfixOf` lower) ["ptr", "pointer", "handle", "addr", "hdl"]
+    paramLooksLikePtr _ = False

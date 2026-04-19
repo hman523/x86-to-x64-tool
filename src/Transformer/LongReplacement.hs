@@ -180,7 +180,7 @@ extractLongVars _ = []
 --   (meaning @long@ is the element/pointee type, not the variable's own type).
 isCompoundBase :: [CDerivedDeclarator NodeInfo] -> Bool
 isCompoundBase (CPtrDeclr _ _   : _) = True
-isCompoundBase (CArrDeclr _ _ _ : _) = True
+isCompoundBase (CArrDeclr {} : _) = True
 isCompoundBase _                      = False
 
 -- ---------------------------------------------------------------------------
@@ -280,7 +280,12 @@ splitMultiLongDecls (CTranslUnit decls ni) =
         let init'' = case init' of
                 Right decl -> case splitDecl decl of
                     [d] -> Right d
-                    _   -> Right decl  -- for-init can only have one decl
+                    -- C only allows one declaration statement in a for-init,
+                    -- so multi-declarator longs (e.g. for(long a=1,b=2;...))
+                    -- cannot be split.  Both variables will be classified and
+                    -- retyped together, which may be suboptimal when they need
+                    -- different fixed-width types.
+                    _   -> Right decl
                 other -> other
         in CFor init'' cond step (splitStmt body) sni
     splitStmt (CSwitch cond body sni) = CSwitch cond (splitStmt body) sni

@@ -188,7 +188,7 @@ linterIntegrationSpec = describe "Linter Integration" $ do
 
     -- Alignment rewrites ----------------------------------------------
 
-    it "retypes int variable storing sizeof result to size_t — SizeofStoredin32bits" $
+    it "retypes int variable storing sizeof result to size_t — SizeofStoredIn32Bits" $
       case result of
         Left err       -> fail err
         Right (src, _) -> src `shouldContain` "size_t"

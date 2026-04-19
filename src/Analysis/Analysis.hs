@@ -1,4 +1,6 @@
-module Analysis.Analysis where 
+module Analysis.Analysis
+  ( analysis
+  ) where 
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes

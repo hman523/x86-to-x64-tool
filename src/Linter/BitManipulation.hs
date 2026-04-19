@@ -1,21 +1,18 @@
-module Linter.BitManipulation where
+{-# LANGUAGE LambdaCase #-}
+module Linter.BitManipulation
+  ( lintBitManipulationIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintBitManipulationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintBitManipulationIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      PackingPtrsWithFlagsInInt   -> lintPackingPtrsWithFlagsInInt   a issue
-      BitShiftsOnPtr              -> lintBitShiftsOnPtr              a issue
-      ExtractingPtrBitsIn32BitVar -> lintExtractingPtrBitsIn32BitVar a issue
-      _                           -> (a, Just issue)
+lintBitManipulationIssues = dispatchLinter $ \case
+    PackingPtrsWithFlagsInInt   -> Just lintPackingPtrsWithFlagsInInt
+    BitShiftsOnPtr              -> Just lintBitShiftsOnPtr
+    ExtractingPtrBitsIn32BitVar -> Just lintExtractingPtrBitsIn32BitVar
+    _                           -> Nothing
 
 -- Cannot be done automatically: packing a 64-bit pointer into a 32-bit int
 -- is fundamentally lossy — the upper 32 bits are discarded. The programmer

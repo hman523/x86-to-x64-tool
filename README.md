@@ -11,7 +11,8 @@ The tool is implemented in Haskell and uses the `language-c` library for parsing
 ## Features
 
 - **Analysis mode**: parse a C file and report all detected portability issues with file and line information
-- **Lint mode**: apply automated fixes and write the result to a new file, reporting any issues that could not be resolved automatically
+- **Lint mode** (`-l`): apply automated fixes and write the result to a new file, reporting any issues that could not be resolved automatically
+- **Transform mode** (`-t`): rewrite `long`/`unsigned long` declarations to semantically equivalent fixed-width types (`int32_t`, `intptr_t`, `size_t`, etc.) based on usage classification
 - **Haskell library API** for use from other Haskell programs
 
 ### Issue Categories Detected
@@ -60,10 +61,16 @@ Usage: x86-to-x64-tool <file.c> [options]
 
 Options:
   -v           Verbose: print a one-sentence explanation for each issue
-  -t           Lint: apply automated x86-to-x64 fixes
-  -o <file>    Write linted source to this file (default: <input>.x64.c)
+  -l           Lint: apply automated x86-to-x64 fixes
+  -t           Transform: rewrite long/unsigned long to fixed-width types
+  -o <file>    Write output to this file (default: <input>.x64.c)
+  --cpp        Run the C preprocessor (gcc) before parsing
+  --strict     Exit with non-zero status on any issue (including warnings)
   --no-color   Disable colored output
   -h, --help   Show this help message
+
+Note: -t and -l cannot be used together.
+      Analysis is per-file; cross-translation-unit issues are not detected.
 ```
 
 ### Examples
@@ -83,10 +90,16 @@ x86-to-x64-tool myprogram.c -v
 Apply automated linting and write the result to `myprogram.x64.c`:
 
 ```
+x86-to-x64-tool myprogram.c -l
+```
+
+Transform `long` types to fixed-width equivalents:
+
+```
 x86-to-x64-tool myprogram.c -t
 ```
 
-Lint and write the output to a specific file:
+Write the output to a specific file:
 
 ```
 x86-to-x64-tool myprogram.c -t -o fixed.c
@@ -104,9 +117,16 @@ analyzeFile :: FilePath -> IO (Either String [Issue])
 -- Right (lintedSource, unresolvedIssues) on success
 lintFile :: FilePath -> IO (Either String (String, [Issue]))
 
+-- Transform a file; rewrites long/unsigned long to fixed-width types
+transformFile :: FilePath -> IO (Either String String)
+
+-- Like transformFile, but runs the C preprocessor (GCC) first
+transformFileWithCPP :: FilePath -> IO (Either String String)
+
 -- Same operations on an in-memory String
 analyzeSource :: String -> Either String [Issue]
 lintSource :: String -> Either String (String, [Issue])
+transformSource :: String -> Either String String
 ```
 
 ## Running Tests
@@ -122,6 +142,7 @@ src/
   X86_to_X64.hs          -- Public API
   Parser/
     Parser.hs            -- C source parser (wraps language-c)
+    FormatSpecParser.hs  -- Printf format specifier parser
   Analysis/
     Analysis.hs          -- Top-level analysis pass
     IssueTypes.hs        -- Issue / severity / category types
@@ -152,11 +173,33 @@ src/
     PointerMath.hs       -- Pointer arithmetic fixes
     Serialization.hs     -- Serialization fixes
     TypeSize.hs          -- Type size fixes
+  Transformer/
+    Transformer.hs       -- Top-level transformation pass
+    Helpers.hs           -- Shared transformation utilities
+    UsageClassifier.hs   -- Classifies long variable usage (number, pointer, size, etc.)
+    LongReplacement.hs   -- Rewrites long declarations to fixed-width types
+    ReturnTypeReplacement.hs -- Rewrites long return types
+    StructMemberReplacement.hs -- Rewrites long struct/union members
+    TypedefReplacement.hs -- Rewrites typedef long declarations
+    CastSync.hs          -- Synchronises casts with retyped variables
+    FormatFix.hs         -- Corrects format specifiers for retyped variables
+    StandaloneCastFix.hs -- Fixes remaining standalone (long) casts
+    FunPtrReplacement.hs -- Rewrites long in function pointer parameters
 app/
   Main.hs                -- CLI entry point
 test/
   ...                    -- Unit and integration tests
 ```
+
+## Known Limitations
+
+- **Single-file scope.** Analysis operates on one translation unit at a time.
+  Cross-file issues (e.g. a struct defined in one file and consumed in another
+  with an incompatible layout) are not detected. Run the tool on every source
+  file in a project and review the combined results.
+- **Macro-opaque.** Code hidden inside `#define` macros is not inspected.
+  Use `--cpp` to expand macros before analysis when possible.
+
 
 ## License
 

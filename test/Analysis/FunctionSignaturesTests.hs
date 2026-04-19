@@ -14,10 +14,12 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "int foo() { int *p; return p; }"
             checkFnsReturnPtrAsInt
 
-        shouldFlagError
-            "flags function returning unsigned int that returns a local pointer variable"
+        shouldFlagErrorWithDetails
+            "flags function returning unsigned int that returns a pointer as FnsReturnPtrAsUInt"
             "unsigned int foo() { int *p; return p; }"
             checkFnsReturnPtrAsInt
+            FnsReturnPtrAsUInt
+            Nothing
 
         shouldNotFlagError
             "does not flag function that legitimately returns int"
@@ -46,10 +48,12 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "void foo(int handle) { int *p; handle = p; }"
             checkFnsParamDeclaredAsIntTakesPtr
 
-        shouldFlagError
-            "flags param declared as unsigned int receiving a pointer value"
+        shouldFlagErrorWithDetails
+            "flags param declared as unsigned int receiving a pointer as FnsParamDeclaredAsUIntTakesPtr"
             "void foo(unsigned int handle) { int *p; handle = p; }"
             checkFnsParamDeclaredAsIntTakesPtr
+            FnsParamDeclaredAsUIntTakesPtr
+            Nothing
 
         shouldNotFlagError
             "does not flag int param receiving int value"
@@ -62,10 +66,12 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "void foo(int n, ...) { __builtin_va_list ap; int x = __builtin_va_arg(ap, int); }"
             checkVaargUsingWrongTypesForPtrArgs
 
-        shouldFlagError
-            "flags va_arg extracting unsigned int (likely a pointer arg)"
+        shouldFlagErrorWithDetails
+            "flags va_arg extracting unsigned int as VaargUsingWrongTypesForPtrArgsUInt"
             "void foo(int n, ...) { __builtin_va_list ap; unsigned int x = __builtin_va_arg(ap, unsigned int); }"
             checkVaargUsingWrongTypesForPtrArgs
+            VaargUsingWrongTypesForPtrArgsUInt
+            Nothing
 
         shouldNotFlagError
             "does not flag va_arg extracting a pointer type"

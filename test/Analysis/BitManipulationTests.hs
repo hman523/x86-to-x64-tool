@@ -24,6 +24,11 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
             "void foo() { int a; int b; int c = (int)(a | b); }"
             checkPackingPtrsWithFlagsInInt
 
+        shouldFlagError
+            "chained cast: (int)(long)(ptr | flags) still detected"
+            "void foo() { int *p; int flags; int packed = (int)(long)(p | flags); }"
+            checkPackingPtrsWithFlagsInInt
+
     describe "checkBitShiftsOnPtr" $ do
         shouldFlagError
             "flags left-shift on pointer-typed variable"
@@ -54,6 +59,11 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
         shouldNotFlagError
             "does not flag cast to int of right-shifted int"
             "void foo() { long x; int bits = (int)(x >> 16); }"
+            checkExtractingPtrBitsIn32BitVar
+
+        shouldFlagError
+            "chained cast: (int)(long)(ptr >> n) still detected"
+            "void foo() { int *p; int bits = (int)(long)(p >> 32); }"
             checkExtractingPtrBitsIn32BitVar
 
     describe "multiple issues" $ do

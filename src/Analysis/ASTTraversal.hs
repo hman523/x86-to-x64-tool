@@ -1,9 +1,21 @@
-module Analysis.ASTTraversal where
+module Analysis.ASTTraversal
+  ( analyzeDecl
+  , analyzeFunDef
+  , extractParamEnv
+  , analyzeStmt
+  , walkExpr
+  , childExprs
+  , stepItem
+  , analyzeDeclaration
+  , analyzeInit
+  , peelCastExpr
+  , peelCastType
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Node (NodeInfo)
 
-import Analysis.TypeChecker (TypeEnv, collectDecl)
+import Analysis.TypeChecker (TypeEnv, CType, collectDecl, typeOfExpr)
 import Analysis.IssueTypes  (Issue)
 
 -- ---------------------------------------------------------------------------
@@ -83,7 +95,7 @@ analyzeStmt f env stmt = case stmt of
         let initIssues = case forInit of
                 Left (Just expr) -> walkExpr f env expr
                 Left Nothing     -> []
-                Right decl       -> analyzeDeclration f env decl
+                Right decl       -> analyzeDeclaration f env decl
             env'       = case forInit of
                 Right decl -> collectDecl decl env
                 _          -> env
@@ -151,7 +163,7 @@ stepItem :: (TypeEnv -> CExpression NodeInfo -> [Issue])
 stepItem f (issues, env) item = case item of
     CBlockDecl decl ->
         let env'   = collectDecl decl env          -- extend env for later items
-            newIss = analyzeDeclration f env decl  -- check initialisers with pre-extension env
+            newIss = analyzeDeclaration f env decl  -- check initialisers with pre-extension env
         in (issues ++ newIss, env')
     CBlockStmt stmt ->
         (issues ++ analyzeStmt f env stmt, env)
@@ -160,11 +172,11 @@ stepItem f (issues, env) item = case item of
 -- | Check a declaration's initialisers and bit-field expressions.  Each
 --   declarator in a `CDecl` can have an optional initialiser or an optional
 --   bit-field size expression; both are checked if present.
-analyzeDeclration :: (TypeEnv -> CExpression NodeInfo -> [Issue])
+analyzeDeclaration :: (TypeEnv -> CExpression NodeInfo -> [Issue])
                   -> TypeEnv
                   -> CDeclaration NodeInfo
                   -> [Issue]
-analyzeDeclration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) declrs
+analyzeDeclaration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) declrs
   where
     analyzeDeclr g ctx (_, maybeInit, maybeExpr) =
         case maybeExpr of
@@ -173,7 +185,7 @@ analyzeDeclration f env (CDecl _ declrs _) = concatMap (analyzeDeclr f env) decl
                 case maybeInit of
                     Just ini -> analyzeInit g ctx ini  -- variable initialiser
                     Nothing  -> []
-analyzeDeclration _ _ (CStaticAssert _ _ _) = []
+analyzeDeclaration _ _ (CStaticAssert {}) = []
 
 -- | Descend into an initialiser, which may itself be a nested initialiser
 --   list (for aggregate types) or a single expression.
@@ -184,3 +196,19 @@ analyzeInit :: (TypeEnv -> CExpression NodeInfo -> [Issue])
 analyzeInit f env (CInitExpr expr _)     = walkExpr f env expr
 analyzeInit f env (CInitList initList _) =
     concatMap (\(_, ini) -> analyzeInit f env ini) initList
+
+-- | Strip intermediate cast expressions to reveal the innermost non-cast
+--   sub-expression.  Useful when pattern-matching on the structural shape of
+--   an expression that may be wrapped in redundant intermediate casts, e.g.
+--   @(int)(long)(ptr | flags)@ should match as @(ptr | flags)@ for
+--   structural checks.
+peelCastExpr :: CExpression a -> CExpression a
+peelCastExpr (CCast _ inner _) = peelCastExpr inner
+peelCastExpr e                 = e
+
+-- | Strip intermediate cast expressions and return the type of the innermost
+--   non-cast sub-expression.  This lets checkers see through chains like
+--   @(int)(long)ptr@ and recognise that the ultimate source is a pointer.
+peelCastType :: TypeEnv -> CExpression NodeInfo -> CType
+peelCastType env (CCast _ inner _) = peelCastType env inner
+peelCastType env expr              = typeOfExpr env expr

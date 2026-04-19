@@ -1,4 +1,9 @@
-module Analysis.Comparison where
+module Analysis.Comparison
+  ( analyzeComparisonIssues
+  , checkLoopCounterAsIntWhenIteratingOverPtrArrays
+  , checkPtrComparisonWithIntConsts
+  , checkUsingIntForFileOffsets
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Ident
@@ -49,7 +54,7 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
     getDeclTypes tenv (CDecl specs declrs _) =
         [ resolveTypedef tenv (resolveType specs derived)
         | (Just (CDeclr _ derived _ _ _), _, _) <- declrs ]
-    getDeclTypes _ (CStaticAssert _ _ _) = []
+    getDeclTypes _ (CStaticAssert {}) = []
 
     -- Extract the CDeclr NodeInfo from the first declarator in a CDecl
     firstDeclrNi (CDecl _ ((Just (CDeclr _ _ _ _ ni), _, _) : _) _) = Just ni

@@ -48,6 +48,30 @@ formatStringsSpec = describe "FormatStrings Analysis" $ do
             "void foo() { unsigned long sz; printf(\"%d\", sz); }"
             checkdUsedWithSizet
 
+    describe "checkuUsedWithSizet" $ do
+        shouldFlagError
+            "flags %u used with unsigned long (size_t) argument"
+            "void foo() { unsigned long sz; printf(\"%u\", sz); }"
+            checkuUsedWithSizet
+
+    describe "checkxUsedWithSizet" $ do
+        shouldFlagError
+            "flags %x used with unsigned long (size_t) argument"
+            "void foo() { unsigned long sz; printf(\"%x\", sz); }"
+            checkxUsedWithSizet
+
+    describe "checkdUsedWithPtrdifft" $ do
+        shouldFlagError
+            "flags %d used with long (ptrdiff_t) argument"
+            "void foo() { long d; printf(\"%d\", d); }"
+            checkdUsedWithPtrdifft
+
+    describe "checkuUsedWithPtrdifft" $ do
+        shouldFlagError
+            "flags %u used with long (ptrdiff_t) argument"
+            "void foo() { long d; printf(\"%u\", d); }"
+            checkuUsedWithPtrdifft
+
     describe "checkldUsedWithLongAssuming64bits" $ do
         shouldFlagError
             "flags %ld used with long (assumes 64-bit long)"

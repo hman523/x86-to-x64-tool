@@ -1,10 +1,16 @@
-module Analysis.MemoryAllocation where
+module Analysis.MemoryAllocation
+  ( analyzeMemoryAllocationIssues
+  , checkAllocationSizeCalcsMayOverflow
+  , checkMallocWithoutOverflowChecking
+  , checkUsingIntToStoreAllocationSizes
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (allocFns)
 import qualified Data.Map as Map
 
 analyzeMemoryAllocationIssues :: CTranslUnit -> [Issue]
@@ -12,9 +18,6 @@ analyzeMemoryAllocationIssues ast =
     checkAllocationSizeCalcsMayOverflow ast
     ++ checkMallocWithoutOverflowChecking ast
     ++ checkUsingIntToStoreAllocationSizes ast
-
-allocFns :: [String]
-allocFns = ["malloc", "calloc", "realloc"]
 
 -- | Flag malloc/calloc/realloc where the size argument is a multiplication of
 --   two int-typed values (product may overflow before widening to size_t).
@@ -54,8 +57,13 @@ checkMallocWithoutOverflowChecking ast@(CTranslUnit decls _) =
            | (isIntType' lt || isUIntType lt) && (isIntType' rt || isUIntType rt) ]
     checkSizeExpr _ _ _ _ = []
 
--- | Flag assignments where a sizeof result is stored in an int/uint variable
---   (sizeof returns size_t; truncating to int loses the high 32 bits on 64-bit).
+-- | Flag assignments where a sizeof-based expression is stored in an
+--   int/uint variable (sizeof returns size_t; truncating to int loses the
+--   high 32 bits on 64-bit).
+--
+--   Note: this intentionally overlaps with
+--   'Analysis.Alignment.checkSizeofStoredIn32bits' — the two checks live in
+--   different categories (MemoryAllocation vs Alignment) so both are reported.
 checkUsingIntToStoreAllocationSizes :: CTranslUnit -> [Issue]
 checkUsingIntToStoreAllocationSizes ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
@@ -67,10 +75,10 @@ checkUsingIntToStoreAllocationSizes ast@(CTranslUnit decls _) =
                 CVar (Ident name _ _) _ -> lookupDeclPos env name
                 _                       -> Nothing
         in [ createIssueWithDecl info mDeclPos Warning UsingIntToStoreAllocationSizes
-           | (isIntType' lhsType || isUIntType lhsType) && hasSizeof rhs ]
+           | (isIntType' lhsType || isUIntType lhsType) && anySizeof rhs ]
     checkAssign _ _ _ = []
 
-    hasSizeof (CSizeofType _ _) = True
-    hasSizeof (CSizeofExpr _ _) = True
-    hasSizeof (CBinary _ l r _) = hasSizeof l || hasSizeof r
-    hasSizeof _                 = False
+    anySizeof (CSizeofType _ _) = True
+    anySizeof (CSizeofExpr _ _) = True
+    anySizeof (CBinary _ l r _) = anySizeof l || anySizeof r
+    anySizeof _                 = False

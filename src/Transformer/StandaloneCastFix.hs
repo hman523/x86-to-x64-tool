@@ -37,24 +37,29 @@ import Transformer.Helpers    (typedefSpec, hasExactlyOneLong, hasUnsignedSpec,
 --   Also handles @(long){expr}@ compound literals.
 fixStandaloneCasts :: CTranslUnit -> CTranslUnit
 fixStandaloneCasts ast@(CTranslUnit decls _) =
-    let env = buildGlobalEnv decls
-    in everywhere (mkT (fixCast env)) ast
+    let globalDeclEnv = foldl addGlobalDecl Map.empty decls
+    in everywhere (mkT (fixFunDef globalDeclEnv)) ast
 
--- | Build a merged 'TypeEnv' from all functions' parameters and locals.
---   Name collisions are resolved by last-write-wins, which is imprecise
---   but safe: any evidence of pointer-ness for a given name will cause
---   @(long)name@ to use @intptr_t@ rather than risk truncation.
-buildGlobalEnv :: [CExternalDeclaration NodeInfo] -> TypeEnv
-buildGlobalEnv = foldl addDecl Map.empty
-  where
-    addDecl env (CFDefExt funDef) = buildFunEnvForCasts funDef `Map.union` env
-    addDecl env (CDeclExt decl)   = collectDecl decl env
-    addDecl env _                 = env
+-- | Rewrite a whole function definition so that every @(long)@ cast inside
+--   it uses the function's own 'TypeEnv' (seeded with file-scope decls).
+--   This avoids collisions between variables in different functions.
+fixFunDef :: TypeEnv -> CFunctionDef NodeInfo -> CFunctionDef NodeInfo
+fixFunDef globalDeclEnv funDef =
+    let env = buildFunEnvForCasts globalDeclEnv funDef
+    in everywhere (mkT (fixCast env)) funDef
 
--- | Build a 'TypeEnv' from a function's parameters and locals.
-buildFunEnvForCasts :: CFunctionDef NodeInfo -> TypeEnv
-buildFunEnvForCasts (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
-    let paramEnv = foldr collectDecl Map.empty (concatMap getParams derived)
+-- | Collect file-scope declarations (globals, prototypes) into a TypeEnv.
+--   Function bodies are NOT included — each function builds its own env.
+addGlobalDecl :: TypeEnv -> CExternalDeclaration NodeInfo -> TypeEnv
+addGlobalDecl env (CDeclExt decl)   = collectDecl decl env
+addGlobalDecl env _                 = env
+
+-- | Build a 'TypeEnv' from a function's parameters and locals,
+--   seeded with the file-scope declarations so that globals are visible
+--   but other functions' locals are NOT.
+buildFunEnvForCasts :: TypeEnv -> CFunctionDef NodeInfo -> TypeEnv
+buildFunEnvForCasts globalEnv (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
+    let paramEnv = foldr collectDecl globalEnv (concatMap getParams derived)
     in case body of
         CCompound _ items _ -> buildTypeEnv items paramEnv
         _                   -> paramEnv
@@ -70,9 +75,10 @@ fixCast env (CCast (CDecl castSpecs castDeclrs castNi) inner exprNi)
     | hasExactlyOneLong castSpecs, not (hasPointerDeclr castDeclrs) =
         let isUnsigned = hasUnsignedSpec castSpecs
             isInnerPtr = isPtr (typeOfExpr env inner)
-            newName    = if isInnerPtr
-                         then if isUnsigned then "uintptr_t" else "intptr_t"
-                         else if isUnsigned then "uint32_t"  else "int32_t"
+            newName
+              | isInnerPtr = if isUnsigned then "uintptr_t" else "intptr_t"
+              | isUnsigned = "uint32_t"
+              | otherwise  = "int32_t"
             newSpec    = typedefSpec newName
             newSpecs   = newSpec : filter (not . isTypeSpec) castSpecs
         in CCast (CDecl newSpecs castDeclrs castNi) inner exprNi
@@ -96,7 +102,7 @@ fixCast _ e = e
 -- | True when a cast declaration has a pointer derived declarator,
 --   i.e. the cast is @(long *)@ rather than plain @(long)@.
 hasPointerDeclr :: [(Maybe (CDeclarator NodeInfo), Maybe (CInitializer NodeInfo), Maybe (CExpression NodeInfo))] -> Bool
-hasPointerDeclr declrs = any hasPtr declrs
+hasPointerDeclr = any hasPtr
   where
     hasPtr (Just (CDeclr _ (CPtrDeclr _ _ : _) _ _ _), _, _) = True
     hasPtr _                                                   = False

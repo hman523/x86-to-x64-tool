@@ -1,21 +1,18 @@
-module Linter.Comparison where
+{-# LANGUAGE LambdaCase #-}
+module Linter.Comparison
+  ( lintComparisonIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintComparisonIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintComparisonIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      LoopCounterAsIntWhenIteratingOverPtrArrays -> lintLoopCounterAsIntWhenIteratingOverPtrArrays a issue
-      PtrComparisonWithIntConsts                 -> lintPtrComparisonWithIntConsts                 a issue
-      UsingIntForFileOffsets                     -> lintUsingIntForFileOffsets                     a issue
-      _                                          -> (a, Just issue)
+lintComparisonIssues = dispatchLinter $ \case
+    LoopCounterAsIntWhenIteratingOverPtrArrays -> Just lintLoopCounterAsIntWhenIteratingOverPtrArrays
+    PtrComparisonWithIntConsts                 -> Just lintPtrComparisonWithIntConsts
+    UsingIntForFileOffsets                     -> Just lintUsingIntForFileOffsets
+    _                                          -> Nothing
 
 lintLoopCounterAsIntWhenIteratingOverPtrArrays :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintLoopCounterAsIntWhenIteratingOverPtrArrays ast issue = case issueDeclPos issue of

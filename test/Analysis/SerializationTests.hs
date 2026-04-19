@@ -19,16 +19,16 @@ serializationSpec = describe "Serialization Analysis" $ do
             "void foo() { int *p; FILE *f; fwrite(p, sizeof(*p), 10, f); }"
             checkWritingPtrDirectToFile
 
-    describe "checkWritingPtrContrainingStructsToFiles" $ do
+    describe "checkWritingPtrContainingStructsToFiles" $ do
         shouldFlagError
             "flags fwrite of struct-with-pointer-member address"
             "struct Node { int *ptr; int val; }; void foo() { struct Node n; FILE *f; fwrite(&n, sizeof(n), 1, f); }"
-            checkWritingPtrContrainingStructsToFiles
+            checkWritingPtrContainingStructsToFiles
 
         shouldNotFlagError
             "does not flag fwrite of struct without pointer members"
             "struct Plain { int x; int y; }; void foo() { struct Plain p; FILE *f; fwrite(&p, sizeof(p), 1, f); }"
-            checkWritingPtrContrainingStructsToFiles
+            checkWritingPtrContainingStructsToFiles
 
     describe "checkPtrInSharedMemory" $ do
         shouldFlagError
@@ -46,6 +46,17 @@ serializationSpec = describe "Serialization Analysis" $ do
             "void foo() { int fd = open(\"/test\", 0); }"
             checkPtrInSharedMemory
 
+    describe "checkPtrInMemoryMappedFiles" $ do
+        shouldFlagError
+            "flags mmap assigned to a pointer-to-pointer variable"
+            "void foo() { int **region; region = mmap(0, 4096, 3, 1, -1, 0); }"
+            checkPtrInMemoryMappedFiles
+
+        shouldNotFlagError
+            "does not flag mmap assigned to a plain pointer"
+            "void foo() { int *region; region = mmap(0, 4096, 3, 1, -1, 0); }"
+            checkPtrInMemoryMappedFiles
+
     describe "checkSendingPtrsOverNetwork" $ do  
         shouldFlagError
             "flags send of pointer-to-pointer buffer"
@@ -62,7 +73,7 @@ serializationSpec = describe "Serialization Analysis" $ do
             "all four serialization checks fire in one function"
             "struct Rec { int *ptr; int val; }; void foo() { int **pp; FILE *f; fwrite(pp, sizeof(*pp), 1, f); struct Rec r; fwrite(&r, sizeof(r), 1, f); int sock; send(sock, pp, sizeof(*pp), 0); int fd = shm_open(\"/test\", 0, 0); }"
             analyzeSerializationIssues
-            [WritingPtrDirectToFile, WritingPtrContrainingStructsToFiles, SendingPtrsOverNetwork, PtrInSharedMemory]
+            [WritingPtrDirectToFile, WritingPtrContainingStructsToFiles, SendingPtrsOverNetwork, PtrInSharedMemory]
 
         shouldFlagNIssues
             "shm_open and shmget each produce one PtrInSharedMemory issue"

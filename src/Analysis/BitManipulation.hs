@@ -1,4 +1,9 @@
-module Analysis.BitManipulation where
+module Analysis.BitManipulation
+  ( analyzeBitManipulationIssues
+  , checkPackingPtrsWithFlagsInInt
+  , checkBitShiftsOnPtr
+  , checkExtractingPtrBitsIn32BitVar
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
@@ -22,7 +27,7 @@ checkPackingPtrsWithFlagsInInt ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
-        in case (isIntType' castTo || isUIntType castTo, inner) of
+        in case (isIntType' castTo || isUIntType castTo, peelCastExpr inner) of
             (True, CBinary COrOp l _ _) ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                 in [ createIssue info Critical PackingPtrsWithFlagsInInt
@@ -51,7 +56,7 @@ checkExtractingPtrBitsIn32BitVar ast@(CTranslUnit decls _) =
   where
     checkCast tenv env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
-        in case (isIntType' castTo || isUIntType castTo, inner) of
+        in case (isIntType' castTo || isUIntType castTo, peelCastExpr inner) of
             (True, CBinary CShrOp l _ _) ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                 in [ createIssue info Critical ExtractingPtrBitsIn32BitVar

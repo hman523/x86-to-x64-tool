@@ -22,6 +22,7 @@ typeSizeLintSpec = describe "TypeSize Linting" $ do
   testLintUsingUIntAsMemSize
   testLintMultiple
   testLintScopedIssues
+  testLintChainedCasts
 
 
 testLintCastPointerToInt :: Spec
@@ -50,20 +51,20 @@ testLintCastPointerToUInt =
 testLintCastIntToPointer :: Spec
 testLintCastIntToPointer =
   describe "lintCastIntToPointer" $ do
-    shouldLintTo "rewrites (int*)x to (intptr_t)x"
+    shouldLeaveUnresolved "leaves (int*)x unresolved (fix changes pointer to int)"
       "int main() { int x = 5; void *p = (int*)x; return 0; }"
       analyzeTypeSizeIssues
       lintTypeSizeIssues
-      "intptr_t"
+      [CastIntToPointer]
 
 testLintCastLongToPointer :: Spec
 testLintCastLongToPointer =
   describe "lintCastLongToPointer" $ do
-    shouldLintTo "rewrites (int*)long to (intptr_t)long"
+    shouldLeaveUnresolved "leaves (int*)long unresolved (fix changes pointer to int)"
       "int main() { long x = 5; void *p = (int*)x; return 0; }"
       analyzeTypeSizeIssues
       lintTypeSizeIssues
-      "intptr_t"
+      [CastLongToPointer]
 
 testLintSizeOfIntIsVoid :: Spec
 testLintSizeOfIntIsVoid =
@@ -189,12 +190,12 @@ testLintScopedIssues =
         lintTypeSizeIssues
         "intptr_t"
 
-    shouldLintTo
-        "(int*)long in while body produces intptr_t in output"
+    shouldLeaveUnresolved
+        "(int*)long in while body is left unresolved"
         "void f(void) { long x = 5; while (1) { void *p = (int*)x; break; } }"
         analyzeTypeSizeIssues
         lintTypeSizeIssues
-        "intptr_t"
+        [CastLongToPointer]
 
     shouldLintTo
         "int size-variable inside if-block is rewritten to size_t"
@@ -209,3 +210,42 @@ testLintScopedIssues =
         \void g(void *q) { int b = (int)q; }"
         analyzeTypeSizeIssues
         lintTypeSizeIssues
+
+-- | Verify that chained casts like @(int)(long)ptr@ are fully resolved:
+--   analysis detects the issue and the linter collapses the chain.
+testLintChainedCasts :: Spec
+testLintChainedCasts =
+  describe "chained cast linting" $ do
+
+    shouldFullyLint
+        "(int)(long)ptr is fully linted to (intptr_t)ptr"
+        "void f(void *p) { int x = (int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldLintTo
+        "(int)(long)ptr produces intptr_t in the output"
+        "void f(void *p) { int x = (int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
+
+    shouldLintNotTo
+        "(int)(long)ptr: intermediate (long) cast is collapsed and absent"
+        "void f(void *p) { int x = (int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "(long)"
+
+    shouldFullyLint
+        "(unsigned int)(long)ptr is fully linted to (uintptr_t)ptr"
+        "void f(void *p) { unsigned int x = (unsigned int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldLintTo
+        "(unsigned int)(long)ptr produces uintptr_t in the output"
+        "void f(void *p) { unsigned int x = (unsigned int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "uintptr_t"

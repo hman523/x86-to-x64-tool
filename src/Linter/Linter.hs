@@ -1,4 +1,6 @@
-module Linter.Linter where
+module Linter.Linter
+  ( lint
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes

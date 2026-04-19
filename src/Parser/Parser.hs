@@ -1,4 +1,9 @@
-module Parser.Parser where
+module Parser.Parser
+  ( parseSource
+  , parseSourceString
+  , parseSourceFile
+  , parseSourceFileWithCPP
+  ) where
 
 import Language.C
 import Language.C.System.GCC (newGCC)
@@ -20,5 +25,4 @@ parseSourceFile path = do
 -- | Read a file from disk, run the C preprocessor (GCC) on it, then parse.
 --   This supports @#include@ directives and macros.
 parseSourceFileWithCPP :: FilePath -> IO (Either ParseError CTranslUnit)
-parseSourceFileWithCPP path =
-    parseCFile (newGCC "gcc") Nothing [] path
+parseSourceFileWithCPP = parseCFile (newGCC "gcc") Nothing []

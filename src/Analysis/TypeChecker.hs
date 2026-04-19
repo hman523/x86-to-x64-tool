@@ -1,4 +1,30 @@
-module Analysis.TypeChecker where
+{-# LANGUAGE LambdaCase #-}
+module Analysis.TypeChecker
+  ( CType(..)
+  , TypeEnv
+  , TypedefEnv
+  , StructEnv
+  , resolveType
+  , resolveBaseType
+  , collectDecl
+  , collectFunDef
+  , buildTypeEnv
+  , buildGlobalEnv
+  , lookupType
+  , lookupDeclPos
+  , typeOfExpr
+  , typeOfDecl
+  , isPointer
+  , isIntType'
+  , isLongType'
+  , isUIntType
+  , buildTypedefEnv
+  , resolveTypedef
+  , buildStructEnv
+  , structHasPointer
+  , ptrToStructWithPtrs
+  , promoteArith
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Data.Node
@@ -9,9 +35,12 @@ import qualified Data.Map.Strict as Map
 data CType
     = TInt               -- int
     | TUInt              -- unsigned int
+    | TShort             -- short
+    | TUShort            -- unsigned short
     | TLong              -- long
     | TULong             -- unsigned long
-    | TShort             -- short
+    | TLongLong          -- long long
+    | TULongLong         -- unsigned long long
     | TChar              -- char
     | TFloat             -- float
     | TDouble            -- double
@@ -39,7 +68,7 @@ resolveType specs derived =
     -- Apply derived declarators (pointers, arrays) from outermost in
     applyDerived t [] = t
     applyDerived t (CPtrDeclr _ _ : rest) = applyDerived (TPointer t) rest
-    applyDerived t (CArrDeclr _ _ _ : rest) = applyDerived (TArray t) rest
+    applyDerived t (CArrDeclr {} : rest) = applyDerived (TArray t) rest
     applyDerived t (_ : rest) = applyDerived t rest
 
 -- | Resolve the base type from declaration specifiers
@@ -50,35 +79,40 @@ resolveBaseType specs =
 
 classifyTypeSpecs :: [CTypeSpecifier a] -> CType
 classifyTypeSpecs specs
-    | hasVoid specs                          = TVoid
-    | hasUnsigned specs && hasLong specs     = TULong
-    | hasUnsigned specs && hasShort specs    = TUInt  -- unsigned short treated as uint
-    | hasUnsigned specs                      = TUInt
-    | hasLong specs                          = TLong
-    | hasShort specs                         = TShort
-    | hasInt specs                           = TInt
-    | hasChar specs                          = TChar
-    | hasFloat specs                         = TFloat
-    | hasDouble specs                        = TDouble
-    | hasTypedefName specs                   = TTypedef (getTypedefName specs)
-    | hasNamedStruct specs                   = TStruct (getSUName specs)
-    | hasNamedUnion specs                    = TUnion  (getSUName specs)
-    | otherwise                              = TUnknown
+    | hasVoid specs                                          = TVoid
+    | hasUnsigned specs && hasLong specs && countLong specs >= 2 = TULongLong
+    | hasUnsigned specs && hasLong specs                     = TULong
+    | hasUnsigned specs && hasShort specs                    = TUShort
+    | hasUnsigned specs                                      = TUInt
+    | hasLong specs && countLong specs >= 2                  = TLongLong
+    | hasLong specs                                          = TLong
+    | hasShort specs                                         = TShort
+    | hasInt specs                                           = TInt
+    | hasSigned specs                                        = TInt
+    | hasChar specs                                          = TChar
+    | hasFloat specs                                         = TFloat
+    | hasDouble specs                                        = TDouble
+    | hasTypedefName specs                                   = TTypedef (getTypedefName specs)
+    | hasNamedStruct specs                                   = TStruct (getSUName specs)
+    | hasNamedUnion specs                                    = TUnion  (getSUName specs)
+    | otherwise                                              = TUnknown
   where
-    hasVoid    ss = any (\s -> case s of CVoidType _ -> True; _ -> False) ss
-    hasUnsigned ss = any (\s -> case s of CUnsigType _ -> True; _ -> False) ss
-    hasLong    ss = any (\s -> case s of CLongType _ -> True; _ -> False) ss
-    hasShort   ss = any (\s -> case s of CShortType _ -> True; _ -> False) ss
-    hasInt     ss = any (\s -> case s of CIntType _ -> True; _ -> False) ss
-    hasChar    ss = any (\s -> case s of CCharType _ -> True; _ -> False) ss
-    hasFloat   ss = any (\s -> case s of CFloatType _ -> True; _ -> False) ss
-    hasDouble  ss = any (\s -> case s of CDoubleType _ -> True; _ -> False) ss
-    hasTypedefName ss = any (\s -> case s of CTypeDef _ _ -> True; _ -> False) ss
+    hasVoid        = any (\case { CVoidType _   -> True; _ -> False })
+    hasUnsigned    = any (\case { CUnsigType _  -> True; _ -> False })
+    hasSigned      = any (\case { CSignedType _ -> True; _ -> False })
+    hasLong        = any (\case { CLongType _   -> True; _ -> False })
+    countLong  ss  = length [() | CLongType _ <- ss]
+    hasShort       = any (\case { CShortType _  -> True; _ -> False })
+    hasInt         = any (\case { CIntType _    -> True; _ -> False })
+    hasChar        = any (\case { CCharType _   -> True; _ -> False })
+    hasFloat       = any (\case { CFloatType _  -> True; _ -> False })
+    hasDouble      = any (\case { CDoubleType _ -> True; _ -> False })
+    hasTypedefName = any (\case { CTypeDef _ _  -> True; _ -> False })
     getTypedefName ss = head [n | CTypeDef (Ident n _ _) _ <- ss]
-    hasNamedStruct ss = any (\s -> case s of
-        CSUType (CStruct CStructTag (Just _) _ _ _) _ -> True; _ -> False) ss
-    hasNamedUnion ss = any (\s -> case s of
-        CSUType (CStruct CUnionTag (Just _) _ _ _) _ -> True; _ -> False) ss
+    hasNamedStruct = any (\case
+        { CSUType (CStruct CStructTag (Just _) _ _ _) _ -> True; _ -> False })
+    hasNamedUnion  = any (\case
+        { CSUType (CStruct CUnionTag  (Just _) _ _ _) _ -> True; _ -> False })
     getSUName ss = head
         [ n | CSUType (CStruct _ (Just (Ident n _ _)) _ _ _) _ <- ss ]
 
@@ -91,7 +125,7 @@ collectDecl (CDecl specs declrs _) env =
     addDeclr s (Just (CDeclr (Just (Ident name _ _)) derived _ _ ni), _, _) acc =
         Map.insert name (resolveType s derived, Just ni) acc
     addDeclr _ _ acc = acc
-collectDecl (CStaticAssert _ _ _) env = env
+collectDecl (CStaticAssert {}) env = env
 
 -- | Build a TypeEnv by walking all compound block items (handles ordering)
 buildTypeEnv :: [CCompoundBlockItem NodeInfo] -> TypeEnv -> TypeEnv
@@ -145,6 +179,12 @@ typeOfExpr env expr = case expr of
     CUnary CNegOp _ _           -> TInt
     -- Assignment expressions have the type of the lhs
     CAssign _ l _ _             -> typeOfExpr env l
+    -- Array subscript: dereference the pointer/array type
+    CIndex arr _ _              ->
+        case typeOfExpr env arr of
+            TPointer t -> t
+            TArray t   -> t
+            _          -> TUnknown
     -- Function call: look up the function name in env to get its return type.
     -- Function declarations and definitions are added to the env by
     -- 'buildGlobalEnv', so e.g. malloc() declared as @void *malloc(size_t)@
@@ -166,11 +206,19 @@ promoteArith l r
     | rank l >= rank r = l
     | otherwise        = r
   where
-    rank TInt    = 0 :: Int
-    rank TUInt   = 1
-    rank TLong   = 2
-    rank TULong  = 3
-    rank _       = 0
+    rank :: CType -> Int
+    rank TShort     = 0
+    rank TUShort    = 0
+    rank TChar      = 0
+    rank TInt       = 1
+    rank TUInt      = 2
+    rank TLong      = 3
+    rank TULong     = 4
+    rank TLongLong  = 5
+    rank TULongLong = 6
+    rank TFloat     = 7
+    rank TDouble    = 8
+    rank _          = 1
 
 -- | Get the CType from a cast declaration
 typeOfDecl :: CDeclaration a -> CType
@@ -179,7 +227,7 @@ typeOfDecl (CDecl specs declrs _) =
                     (Just (CDeclr _ d _ _ _), _, _) : _ -> d
                     _                                    -> []
     in resolveType specs derived
-typeOfDecl (CStaticAssert _ _ _) = TUnknown
+typeOfDecl (CStaticAssert {}) = TUnknown
 
 -- | Record a function definition's name in the TypeEnv, mapped to its
 --   return type.  This lets 'typeOfExpr' resolve the result of a call to
@@ -212,21 +260,23 @@ isPointer (TPointer _) = True
 isPointer _            = False
 
 -- | True only for signed @int@.  Unsigned int is handled by 'isUIntType'.
---   The asymmetry with 'isLongType'' (which includes unsigned long) is
---   intentional: the two paths share no common check functions.
 isIntType' :: CType -> Bool
 isIntType' TInt = True
 isIntType' _    = False
 
+-- | True for @long@ or @unsigned long@ (types whose size changes between
+--   x86 and LP64).  Does NOT include @long long@ / @unsigned long long@
+--   which are always 64-bit on both platforms.
 isLongType' :: CType -> Bool
 isLongType' TLong  = True
 isLongType' TULong = True
 isLongType' _      = False
 
+-- | True only for @unsigned int@.  Does NOT include @unsigned long@ — on
+--   LP64 systems @unsigned long@ is 64-bit and safe for pointer storage.
 isUIntType :: CType -> Bool
-isUIntType TUInt  = True
-isUIntType TULong = True
-isUIntType _      = False
+isUIntType TUInt = True
+isUIntType _     = False
 
 -- ---------------------------------------------------------------------------
 -- Typedef environment
@@ -245,9 +295,9 @@ buildTypedefEnv (CTranslUnit decls _) = foldr collectTypedef Map.empty decls
             let baseSpecs = filter (not . isStorageSpec) specs
             in foldr (insertTypedef baseSpecs) acc declrs
         | otherwise = acc
-    collectTypedefDecl (CStaticAssert _ _ _) acc = acc
+    collectTypedefDecl (CStaticAssert {}) acc = acc
 
-    isTypedefDecl ss = any isTypedefSpec ss
+    isTypedefDecl = any isTypedefSpec
     isTypedefSpec (CStorageSpec (CTypedef _)) = True
     isTypedefSpec _                           = False
 
@@ -280,7 +330,7 @@ buildStructEnv (CTranslUnit decls _) = foldr collectDecl' Map.empty decls
     extractMembers (CDecl specs declrs _) =
         [ (n, resolveType specs derived)
         | (Just (CDeclr (Just (Ident n _ _)) derived _ _ _), _, _) <- declrs ]
-    extractMembers (CStaticAssert _ _ _) = []
+    extractMembers (CStaticAssert {}) = []
 
 -- | True if the named struct/union contains at least one pointer-typed member.
 structHasPointer :: StructEnv -> String -> Bool
@@ -288,6 +338,12 @@ structHasPointer senv name =
     case Map.lookup name senv of
         Just members -> any (isPointer . snd) members
         Nothing      -> False
+
+-- | True when @t@ is @TPointer (TStruct name)@ and that struct has at least
+--   one pointer-typed member.
+ptrToStructWithPtrs :: StructEnv -> CType -> Bool
+ptrToStructWithPtrs senv (TPointer (TStruct name)) = structHasPointer senv name
+ptrToStructWithPtrs _ _                             = False
 
 -- ---------------------------------------------------------------------------
 

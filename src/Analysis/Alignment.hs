@@ -1,4 +1,13 @@
-module Analysis.Alignment where
+module Analysis.Alignment
+  ( analyzeAlignmentIssues
+  , checkStructsWithMixedPtrNonPtrMembers
+  , checkUnionsContainingPtrAndInts
+  , checkPackedStructsWithPtrs
+  , checkStructContainingPtrWrittenToBinFile
+  , checkStructContainingPtrReadFromBinFile
+  , checkSizeofStoredIn32bits
+  , checkHardCodedStructSizes
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (getCInteger)
@@ -7,6 +16,7 @@ import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (allocFns, ioWriteFns, ioReadFns)
 import qualified Data.Map as Map
 
 analyzeAlignmentIssues :: CTranslUnit -> [Issue]
@@ -28,7 +38,7 @@ getMemberTypes :: CDeclaration NodeInfo -> [CType]
 getMemberTypes (CDecl specs declrs _) =
     [ resolveType specs derived
     | (Just (CDeclr _ derived _ _ _), _, _) <- declrs ]
-getMemberTypes (CStaticAssert _ _ _) = []
+getMemberTypes (CStaticAssert {}) = []
 
 -- | True if the attribute list contains @packed@ / @__packed__@.
 isPackedStruct :: [CAttribute NodeInfo] -> Bool
@@ -53,7 +63,7 @@ walkStructDefs f (CTranslUnit decls _) = concatMap checkDecl decls
 
 -- | Flag structs that mix pointer and integer/long members (layout changes on 64-bit).
 checkStructsWithMixedPtrNonPtrMembers :: CTranslUnit -> [Issue]
-checkStructsWithMixedPtrNonPtrMembers ast = walkStructDefs checkSU ast
+checkStructsWithMixedPtrNonPtrMembers = walkStructDefs checkSU
   where
     checkSU (CStruct CStructTag _ (Just members) _ info) =
         let types       = concatMap getMemberTypes members
@@ -65,7 +75,7 @@ checkStructsWithMixedPtrNonPtrMembers ast = walkStructDefs checkSU ast
 
 -- | Flag unions that contain both pointer and integer members.
 checkUnionsContainingPtrAndInts :: CTranslUnit -> [Issue]
-checkUnionsContainingPtrAndInts ast = walkStructDefs checkSU ast
+checkUnionsContainingPtrAndInts = walkStructDefs checkSU
   where
     checkSU (CStruct CUnionTag _ (Just members) _ info) =
         let types    = concatMap getMemberTypes members
@@ -77,7 +87,7 @@ checkUnionsContainingPtrAndInts ast = walkStructDefs checkSU ast
 
 -- | Flag packed structs that contain pointer members (pointers lose alignment).
 checkPackedStructsWithPtrs :: CTranslUnit -> [Issue]
-checkPackedStructsWithPtrs ast = walkStructDefs checkSU ast
+checkPackedStructsWithPtrs = walkStructDefs checkSU
   where
     checkSU (CStruct _ _ (Just members) attrs info) =
         let types   = concatMap getMemberTypes members
@@ -97,7 +107,7 @@ checkStructContainingPtrWrittenToBinFile ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkWrite senv) Map.empty) decls
   where
     checkWrite senv env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["fwrite", "write"], length args >= 1 =
+        | fname `elem` ioWriteFns, not (null args) =
             let bufType = typeOfExpr env (head args)
             in [ createIssue info Critical StructContainingPtrWrittenToBinFile
                | ptrToStructWithPtrs senv bufType ]
@@ -110,16 +120,11 @@ checkStructContainingPtrReadFromBinFile ast@(CTranslUnit decls _) =
     in concatMap (analyzeDecl (checkRead senv) Map.empty) decls
   where
     checkRead senv env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["fread", "read"], length args >= 1 =
+        | fname `elem` ioReadFns, not (null args) =
             let bufType = typeOfExpr env (head args)
-            in [ createIssue info Critical StrucContainingPtrReadFromBinFile
+            in [ createIssue info Critical StructContainingPtrReadFromBinFile
                | ptrToStructWithPtrs senv bufType ]
     checkRead _ _ _ = []
-
--- | True when t is TPointer (TStruct name) and the struct has pointer members.
-ptrToStructWithPtrs :: StructEnv -> CType -> Bool
-ptrToStructWithPtrs senv (TPointer (TStruct name)) = structHasPointer senv name
-ptrToStructWithPtrs _ _                             = False
 
 -- ---------------------------------------------------------------------------
 -- Size arithmetic checks
@@ -136,7 +141,7 @@ checkSizeofStoredIn32bits ast@(CTranslUnit decls _) =
             mDeclPos = case lhs of
                 CVar (Ident name _ _) _ -> lookupDeclPos env name
                 _                       -> Nothing
-        in [ createIssueWithDecl info mDeclPos Warning SizeofStoredin32bits
+        in [ createIssueWithDecl info mDeclPos Warning SizeofStoredIn32Bits
            | (isIntType' lhsType || isUIntType lhsType) && isSizeof rhs ]
     checkAssign _ _ _ = []
 
@@ -151,7 +156,7 @@ checkHardCodedStructSizes (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["malloc", "calloc"] =
+        | fname `elem` allocFns =
             [ createIssue info Warning HardCodedStructSizes
             | any isLargeLiteral args ]
     checkExpr _ _ = []

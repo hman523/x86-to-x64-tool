@@ -426,13 +426,37 @@ testMultiDeclarator = describe "Multi-declarator edge cases" $ do
 testChainedCasts :: Spec
 testChainedCasts = describe "Chained cast edge cases" $ do
 
-    -- (int)(long)ptr — outer int cast looks at a long, not a pointer;
-    -- checkPointerToInt does not fire (long is not a pointer type).
-    -- This is a known limitation: the pointer origin is masked by the
-    -- intermediate (long) step.  The test documents expected behaviour.
-    shouldNotFlagError
-        "(int)(long)ptr: outer cast sees long, not pointer — not flagged by checkPointerToInt"
+    -- (int)(long)ptr — the intermediate (long) cast previously hid the
+    -- pointer origin from checkPointerToInt.  peelCastType now strips
+    -- intermediate casts so the pointer source is visible.
+    shouldFlagError
+        "(int)(long)ptr: peeled to pointer, flagged by checkPointerToInt"
         "void f(void *p) { int x = (int)(long)p; }"
+        checkPointerToInt
+
+    shouldFlagErrorWithDetails
+        "(int)(long)ptr: issue is tagged CastPointerToInt"
+        "void f(void *p) { int x = (int)(long)p; }"
+        checkPointerToInt
+        CastPointerToInt
+        (Just "(int)(long)p")
+
+    -- (unsigned int)(long)ptr
+    shouldFlagError
+        "(unsigned int)(long)ptr: peeled to pointer, flagged by checkPointerToUInt"
+        "void f(void *p) { unsigned int x = (unsigned int)(long)p; }"
+        checkPointerToUInt
+
+    -- Triple chain: (int)(void*)(long)ptr — still peeled to pointer
+    shouldFlagError
+        "(int)(void*)(long)ptr: triple chain peeled to pointer"
+        "void f(void *p) { int x = (int)(void*)(long)p; }"
+        checkPointerToInt
+
+    -- Non-pointer chain: (int)(double)5 — no pointer, should not fire
+    shouldNotFlagError
+        "(int)(double)x: non-pointer chain does not fire checkPointerToInt"
+        "void f(void) { double d = 3.14; int x = (int)d; }"
         checkPointerToInt
 
     shouldFlagError

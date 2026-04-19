@@ -1,22 +1,19 @@
-module Linter.PointerMath where
+{-# LANGUAGE LambdaCase #-}
+module Linter.PointerMath
+  ( lintPointerMathIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintPointerMathIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintPointerMathIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      PtrDiffStoredAs32bit                    -> lintPtrDiffStoredAs32bit                    a issue
-      PointerAddOverflow                      -> lintPointerAddOverflow                      a issue
-      PtrSubUnderflow                         -> lintPtrSubUnderflow                         a issue
-      ArrayIndexingIntInArrayOver2tothe31size -> lintArrayIndexingIntInArrayOver2tothe31size a issue
-      _                                       -> (a, Just issue)
+lintPointerMathIssues = dispatchLinter $ \case
+    PtrDiffStoredAs32bit                    -> Just lintPtrDiffStoredAs32bit
+    PointerAddOverflow                      -> Just lintPointerAddOverflow
+    PtrSubUnderflow                         -> Just lintPtrSubUnderflow
+    ArrayIndexingIntInArrayOver2tothe31size -> Just lintArrayIndexingIntInArrayOver2tothe31size
+    _                                       -> Nothing
 
 lintPtrDiffStoredAs32bit :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintPtrDiffStoredAs32bit ast issue = case issueDeclPos issue of

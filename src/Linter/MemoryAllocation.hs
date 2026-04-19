@@ -1,21 +1,18 @@
-module Linter.MemoryAllocation where
+{-# LANGUAGE LambdaCase #-}
+module Linter.MemoryAllocation
+  ( lintMemoryAllocationIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintMemoryAllocationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintMemoryAllocationIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      AllocationSizeCalcsMayOverflow -> lintAllocationSizeCalcsMayOverflow a issue
-      MallocWithoutOverflowChecking  -> lintMallocWithoutOverflowChecking  a issue
-      UsingIntToStoreAllocationSizes -> lintUsingIntToStoreAllocationSizes a issue
-      _                              -> (a, Just issue)
+lintMemoryAllocationIssues = dispatchLinter $ \case
+    AllocationSizeCalcsMayOverflow -> Just lintAllocationSizeCalcsMayOverflow
+    MallocWithoutOverflowChecking  -> Just lintMallocWithoutOverflowChecking
+    UsingIntToStoreAllocationSizes -> Just lintUsingIntToStoreAllocationSizes
+    _                              -> Nothing
 
 -- Cannot be done automatically: malloc(n * m) where both operands are int can
 -- overflow before widening to size_t. The fix (using calloc(n, m), casting one

@@ -45,6 +45,33 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "struct Bar { int *ptr; int val; };"
             checkUnionsContainingPtrAndInts
 
+    describe "checkPackedStructsWithPtrs" $ do
+        shouldFlagError
+            "flags packed struct containing a pointer member"
+            "struct __attribute__((packed)) Pkt { int *ptr; int val; };"
+            checkPackedStructsWithPtrs
+
+        shouldNotFlagError
+            "does not flag packed struct with no pointers"
+            "struct __attribute__((packed)) Pkt { int a; int b; };"
+            checkPackedStructsWithPtrs
+
+        shouldNotFlagError
+            "does not flag non-packed struct with pointer"
+            "struct Foo { int *ptr; int val; };"
+            checkPackedStructsWithPtrs
+
+    describe "checkStructContainingPtrReadFromBinFile" $ do
+        shouldFlagError
+            "flags fread into struct with pointer member"
+            "struct Node { int *next; int val; }; void foo() { struct Node n; FILE *f; fread(&n, sizeof(n), 1, f); }"
+            checkStructContainingPtrReadFromBinFile
+
+        shouldNotFlagError
+            "does not flag fread of plain int buffer"
+            "void foo() { int buf; FILE *f; fread(&buf, sizeof(buf), 1, f); }"
+            checkStructContainingPtrReadFromBinFile
+
     describe "checkSizeofStoredIn32bits" $ do
         shouldFlagError
             "flags sizeof result assigned to int variable"
@@ -88,7 +115,7 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "four alignment checks fire from struct, union, sizeof, and malloc in one snippet"
             "struct Foo { int *p; int x; }; union Bar { int *ptr; int val; }; void foo() { int sz; sz = sizeof(int *); void *m = malloc(32); }"
             analyzeAlignmentIssues
-            [StructsWithMixedPtrNonPtrMembers, UnionsContainingPtrAndInts, SizeofStoredin32bits, HardCodedStructSizes]
+            [StructsWithMixedPtrNonPtrMembers, UnionsContainingPtrAndInts, SizeofStoredIn32Bits, HardCodedStructSizes]
 
         shouldFlagNIssues
             "two mixed-member struct definitions produce exactly two issues"

@@ -197,4 +197,19 @@ testFormatStringsIntegration =
       "void foo() { unsigned long sz; long n; int *p; printf(\"%d %u %x %d %u %d %u %x %lu %ld\", sz, sz, sz, n, n, p, p, p, p, n); }"
       analyzeFormatStringIssues
       lintFormatStringsIssues
+    shouldFullyLint
+      "resolves %d in fprintf (format arg at index 1)"
+      "void foo() { int *p; fprintf(stdout, \"%d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
+    shouldFullyLint
+      "resolves %d in sprintf (format arg at index 1)"
+      "void foo() { char buf[64]; int *p; sprintf(buf, \"%d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
+    shouldFullyLint
+      "resolves %d in snprintf (format arg at index 2)"
+      "void foo() { char buf[64]; int *p; snprintf(buf, 64, \"%d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
 

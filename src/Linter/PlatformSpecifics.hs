@@ -1,24 +1,21 @@
-module Linter.PlatformSpecifics where
+{-# LANGUAGE LambdaCase #-}
+module Linter.PlatformSpecifics
+  ( lintPlatformSpecificsIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintPlatformSpecificsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintPlatformSpecificsIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      InlineAsmWithx86Instructions  -> lintInlineAsmWithx86Instructions  a issue
-      AsmBlocks                     -> lintAsmBlocks                     a issue
-      HandleTypesCastToInt          -> lintHandleTypesCastToInt          a issue
-      HandleTypesCastToUInt         -> lintHandleTypesCastToUInt         a issue
-      X86SpecificCompilerIntrinsics -> lintX86SpecificCompilerIntrinsics a issue
-      AssumptionsAboutRegSizes      -> lintAssumptionsAboutRegSizes      a issue
-      _                             -> (a, Just issue)
+lintPlatformSpecificsIssues = dispatchLinter $ \case
+    InlineAsmWithx86Instructions  -> Just lintInlineAsmWithx86Instructions
+    AsmBlocks                     -> Just lintAsmBlocks
+    HandleTypesCastToInt          -> Just lintHandleTypesCastToInt
+    HandleTypesCastToUInt         -> Just lintHandleTypesCastToUInt
+    X86SpecificCompilerIntrinsics -> Just lintX86SpecificCompilerIntrinsics
+    AssumptionsAboutRegSizes      -> Just lintAssumptionsAboutRegSizes
+    _                             -> Nothing
 
 -- Cannot be done automatically: the asm block uses x86 32-bit register names
 -- (%eax, %ebx, etc.). The 64-bit counterparts (%rax, %rbx, etc.) differ in

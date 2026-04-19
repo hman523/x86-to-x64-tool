@@ -1,4 +1,18 @@
-module Analysis.FormatStrings where
+module Analysis.FormatStrings
+  ( analyzeFormatStringIssues
+  , fmtArgIndex
+  , getFmtString
+  , checkdUsedWithSizet
+  , checkuUsedWithSizet
+  , checkxUsedWithSizet
+  , checkdUsedWithPtrdifft
+  , checkuUsedWithPtrdifft
+  , checkdUsedWithPtr
+  , checkuUsedWithPtr
+  , checkxUsedWithPtr
+  , checkluUsedForPtrSizedVals
+  , checkldUsedWithLongAssuming64bits
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (CString(..))

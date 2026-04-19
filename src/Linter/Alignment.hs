@@ -1,25 +1,22 @@
-module Linter.Alignment where
+{-# LANGUAGE LambdaCase #-}
+module Linter.Alignment
+  ( lintAlignmentIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintAlignmentIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintAlignmentIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      StructContainingPtrWrittenToBinFile -> lintStructContainingPtrWrittenToBinFile a issue
-      StrucContainingPtrReadFromBinFile   -> lintStrucContainingPtrReadFromBinFile   a issue
-      StructsWithMixedPtrNonPtrMembers    -> lintStructsWithMixedPtrNonPtrMembers    a issue
-      UnionsContainingPtrAndInts          -> lintUnionsContainingPtrAndInts          a issue
-      PackedStructsWithPtrs               -> lintPackedStructsWithPtrs               a issue
-      SizeofStoredin32bits                -> lintSizeofStoredin32bits                a issue
-      HardCodedStructSizes                -> lintHardCodedStructSizes                a issue
-      _                                   -> (a, Just issue)
+lintAlignmentIssues = dispatchLinter $ \case
+    StructContainingPtrWrittenToBinFile -> Just lintStructContainingPtrWrittenToBinFile
+    StructContainingPtrReadFromBinFile  -> Just lintStructContainingPtrReadFromBinFile
+    StructsWithMixedPtrNonPtrMembers   -> Just lintStructsWithMixedPtrNonPtrMembers
+    UnionsContainingPtrAndInts         -> Just lintUnionsContainingPtrAndInts
+    PackedStructsWithPtrs              -> Just lintPackedStructsWithPtrs
+    SizeofStoredIn32Bits               -> Just lintSizeofStoredIn32Bits
+    HardCodedStructSizes               -> Just lintHardCodedStructSizes
+    _                                  -> Nothing
 
 -- Cannot be done automatically: the struct's pointer fields make the binary
 -- layout non-portable. Fixing this requires redesigning the serialization
@@ -34,8 +31,8 @@ lintStructContainingPtrWrittenToBinFile = unlintable
 -- 32-bit pointer values in the stream. Correct deserialization requires
 -- programmer-defined logic to reconstruct the 64-bit pointers; no
 -- mechanical rewrite of the read site can recover the original semantics.
-lintStrucContainingPtrReadFromBinFile :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintStrucContainingPtrReadFromBinFile = unlintable
+lintStructContainingPtrReadFromBinFile :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintStructContainingPtrReadFromBinFile = unlintable
 
 -- Cannot be done automatically: mixed pointer/integer structs will have
 -- different padding on 64-bit. Valid fixes include reordering members,
@@ -60,8 +57,8 @@ lintUnionsContainingPtrAndInts = unlintable
 lintPackedStructsWithPtrs :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintPackedStructsWithPtrs = unlintable
 
-lintSizeofStoredin32bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintSizeofStoredin32bits ast issue = case issueDeclPos issue of
+lintSizeofStoredIn32Bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintSizeofStoredIn32Bits ast issue = case issueDeclPos issue of
     Just ni -> (retypeDecl ni (typedefSpec "size_t") ast, Nothing)
     Nothing -> (ast, Just issue)
 

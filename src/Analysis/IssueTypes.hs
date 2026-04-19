@@ -1,19 +1,33 @@
-module Analysis.IssueTypes where
+module Analysis.IssueTypes
+  ( Severity(..)
+  , IssueTag(..)
+  , Category(..)
+  , Issue(..)
+  , getCategory
+  , createIssue
+  , createIssueWithDecl
+  , issueType
+  , category
+  , issueSeverity
+  , issuePos
+  , issueDeclPos
+  , prettyPrintIssues
+  ) where
 
 import Language.C.Data.Node (NodeInfo)
 import Data.Char (toUpper)
 import Language.C.Data.Position (posOf, posFile, posRow)
 
-data Severity = Critical | Warning | Low deriving (Show, Eq)
+data Severity = Critical | Warning deriving (Show, Eq)
 
 data IssueTag
     -- Alignment Issues
     = StructContainingPtrWrittenToBinFile
-    | StrucContainingPtrReadFromBinFile
+    | StructContainingPtrReadFromBinFile
     | StructsWithMixedPtrNonPtrMembers
     | UnionsContainingPtrAndInts
     | PackedStructsWithPtrs
-    | SizeofStoredin32bits
+    | SizeofStoredIn32Bits
     | HardCodedStructSizes
     -- Bit Manipulation Issues
     | PackingPtrsWithFlagsInInt
@@ -65,7 +79,7 @@ data IssueTag
     | ArrayIndexingIntInArrayOver2tothe31size
     -- Serialization Issues
     | WritingPtrDirectToFile
-    | WritingPtrContrainingStructsToFiles
+    | WritingPtrContainingStructsToFiles
     | SendingPtrsOverNetwork
     | PtrInMemoryMappedFiles
     | PtrInSharedMemory
@@ -113,11 +127,11 @@ getCategory :: IssueTag -> Category
 getCategory tag = case tag of 
     -- Alignment Issues
     StructContainingPtrWrittenToBinFile -> AlignmentIssue
-    StrucContainingPtrReadFromBinFile -> AlignmentIssue
+    StructContainingPtrReadFromBinFile -> AlignmentIssue
     StructsWithMixedPtrNonPtrMembers -> AlignmentIssue
     UnionsContainingPtrAndInts -> AlignmentIssue
     PackedStructsWithPtrs -> AlignmentIssue
-    SizeofStoredin32bits -> AlignmentIssue
+    SizeofStoredIn32Bits -> AlignmentIssue
     HardCodedStructSizes -> AlignmentIssue
     -- Bit Manipulation Issues
     PackingPtrsWithFlagsInInt -> BitManipulationIssue
@@ -169,7 +183,7 @@ getCategory tag = case tag of
     ArrayIndexingIntInArrayOver2tothe31size -> PointerMathIssue
     -- Serialization Issues
     WritingPtrDirectToFile -> SerializationIssue
-    WritingPtrContrainingStructsToFiles -> SerializationIssue
+    WritingPtrContainingStructsToFiles -> SerializationIssue
     SendingPtrsOverNetwork -> SerializationIssue
     PtrInMemoryMappedFiles -> SerializationIssue
     PtrInSharedMemory -> SerializationIssue
@@ -208,7 +222,6 @@ ansi True  code s = "\ESC[" ++ code ++ "m" ++ s ++ "\ESC[0m"
 sevCode :: Severity -> String
 sevCode Critical = "1;31"   -- bold red
 sevCode Warning  = "1;33"   -- bold yellow
-sevCode Low      = "1;32"   -- bold green
 
 catCode :: Category -> String
 catCode AlignmentIssue         = "35"    -- magenta
@@ -279,7 +292,7 @@ prettyPrintIssues verbose useColor termWidth issues =
                                    ("Declared at " ++ posFile (posOf ni)
                                     ++ ":" ++ show (posRow (posOf ni)) ++ ".")
             in num ++ sevStr ++ " " ++ loc ++ " " ++ tagStr ++ " " ++ catStr ++ explanation
-    in unlines $ map fmt (zip [(1::Int)..] issues)
+    in unlines $ zipWith (curry fmt) [(1::Int)..] issues
 
 createIssue :: NodeInfo -> Severity -> IssueTag -> Issue
 createIssue pos sev tag = Issue pos Nothing sev tag (getCategory tag)
@@ -292,11 +305,11 @@ describeIssue :: IssueTag -> String
 describeIssue tag = case tag of
     -- Alignment
     StructContainingPtrWrittenToBinFile      -> "Pointer members change byte width on 64-bit, making the binary file format incompatible across architectures."
-    StrucContainingPtrReadFromBinFile        -> "Reading a struct with pointer members from a binary file assumes a fixed pointer size that differs between 32-bit and 64-bit."
+    StructContainingPtrReadFromBinFile        -> "Reading a struct with pointer members from a binary file assumes a fixed pointer size that differs between 32-bit and 64-bit."
     StructsWithMixedPtrNonPtrMembers         -> "Mixing pointer and non-pointer members can cause unexpected padding differences between 32-bit and 64-bit due to pointer alignment requirements."
     UnionsContainingPtrAndInts               -> "A union over a pointer and an integer has different sizes on 32-bit vs 64-bit, causing incorrect integer values when the pointer is stored."
     PackedStructsWithPtrs                    -> "Packed structs suppress alignment padding, which can cause unaligned pointer access on 64-bit architectures."
-    SizeofStoredin32bits                     -> "sizeof returns size_t, which is 64-bit on a 64-bit system; truncating it to a 32-bit int silently discards the upper 32 bits."
+    SizeofStoredIn32Bits                     -> "sizeof returns size_t, which is 64-bit on a 64-bit system; truncating it to a 32-bit int silently discards the upper 32 bits."
     HardCodedStructSizes                     -> "Hardcoded byte sizes for struct allocations break when pointer members change width on a 64-bit target."
     -- Bit Manipulation
     PackingPtrsWithFlagsInInt                -> "Packing a pointer and flags into a 32-bit int loses the upper 32 bits of a 64-bit pointer."
@@ -348,7 +361,7 @@ describeIssue tag = case tag of
     ArrayIndexingIntInArrayOver2tothe31size  -> "Using a 32-bit int as an array index limits addressable elements to 2^31; arrays larger than 2 GB require a 64-bit index type."
     -- Serialization
     WritingPtrDirectToFile                   -> "Writing a raw pointer value to a file embeds a 32-bit or 64-bit address that will be invalid when read back on a different architecture."
-    WritingPtrContrainingStructsToFiles      -> "Writing a struct containing pointer members to a binary file embeds pointer-width-dependent values that differ between 32-bit and 64-bit."
+    WritingPtrContainingStructsToFiles      -> "Writing a struct containing pointer members to a binary file embeds pointer-width-dependent values that differ between 32-bit and 64-bit."
     SendingPtrsOverNetwork                   -> "Sending a pointer or a struct containing pointers over the network transmits an address that is meaningless on any other machine or architecture."
     PtrInMemoryMappedFiles                   -> "Storing a pointer in a memory-mapped file embeds an address that is invalid when the file is mapped at a different base address or on a different word-size system."
     PtrInSharedMemory                        -> "Storing pointers in shared memory is unsafe across processes or systems with different address spaces or pointer widths."

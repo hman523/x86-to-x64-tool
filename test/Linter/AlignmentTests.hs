@@ -9,11 +9,11 @@ import Analysis.IssueTypes
 alignmentLintSpec :: Spec
 alignmentLintSpec = describe "Alignment Linting" $ do
   testLintStructContainingPtrWrittenToBinFile
-  testLintStrucContainingPtrReadFromBinFile
+  testLintStructContainingPtrReadFromBinFile
   testLintStructsWithMixedPtrNonPtrMembers
   testLintUnionsContainingPtrAndInts
   testLintPackedStructsWithPtrs
-  testLintSizeofStoredin32bits
+  testLintSizeofStoredIn32Bits
   testLintHardCodedStructSizes
 
 testLintStructContainingPtrWrittenToBinFile :: Spec
@@ -25,14 +25,14 @@ testLintStructContainingPtrWrittenToBinFile =
       lintAlignmentIssues
       [StructContainingPtrWrittenToBinFile]
 
-testLintStrucContainingPtrReadFromBinFile :: Spec
-testLintStrucContainingPtrReadFromBinFile =
-  describe "lintStrucContainingPtrReadFromBinFile" $ do
-    shouldLeaveUnresolved "leaves StrucContainingPtrReadFromBinFile unresolved"
+testLintStructContainingPtrReadFromBinFile :: Spec
+testLintStructContainingPtrReadFromBinFile =
+  describe "lintStructContainingPtrReadFromBinFile" $ do
+    shouldLeaveUnresolved "leaves StructContainingPtrReadFromBinFile unresolved"
       "struct S { int *p; void *q; }; void f() { struct S s; fread(&s, sizeof(s), 1, 0); }"
       analyzeAlignmentIssues
       lintAlignmentIssues
-      [StrucContainingPtrReadFromBinFile]
+      [StructContainingPtrReadFromBinFile]
 
 testLintStructsWithMixedPtrNonPtrMembers :: Spec
 testLintStructsWithMixedPtrNonPtrMembers =
@@ -61,9 +61,9 @@ testLintPackedStructsWithPtrs =
       lintAlignmentIssues
       [PackedStructsWithPtrs]
 
-testLintSizeofStoredin32bits :: Spec
-testLintSizeofStoredin32bits =
-  describe "lintSizeofStoredin32bits" $ do
+testLintSizeofStoredIn32Bits :: Spec
+testLintSizeofStoredIn32Bits =
+  describe "lintSizeofStoredIn32Bits" $ do
     shouldLintTo "rewrites int variable storing sizeof result to size_t"
       "void f() { int n; n = sizeof(int); }"
       analyzeAlignmentIssues

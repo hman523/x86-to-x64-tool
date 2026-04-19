@@ -16,13 +16,13 @@ module Transformer.UsageClassifier
     ) where
 
 import Data.Generics        (listify)
+import Data.Maybe           (maybeToList)
 import Language.C.Syntax.AST
 import Language.C.Data.Node  (NodeInfo)
 import Language.C.Data.Ident (Ident(..))
 
 import Analysis.TypeChecker (TypeEnv, CType(..), typeOfExpr, buildTypeEnv, collectDecl)
-
-import qualified Data.Map.Strict as Map
+import Analysis.KnownFunctions (sizeArgFunctions)
 
 -- ---------------------------------------------------------------------------
 -- Abstract type categories (advisor taxonomy)
@@ -75,7 +75,7 @@ evidenceFromExprNode env name expr = case expr of
     -- Use rhsEvidenceFor so that sizeof(x) anywhere in rhs is suppressed.
     CAssign op (CVar (Ident n _ _) _) rhs _
         | n == name -> rhsEvidenceFor n env rhs
-                       ++ if isBitwiseAssignOp op then [BitSeqType] else []
+                       ++ [BitSeqType | isBitwiseAssignOp op]
 
     -- Bitwise usage: x & e, x | e, x ^ e, x << e, x >> e
     CBinary op (CVar (Ident n _ _) _) _ _
@@ -87,7 +87,19 @@ evidenceFromExprNode env name expr = case expr of
     CUnary CCompOp (CVar (Ident n _ _) _) _
         | n == name -> [BitSeqType]
 
+    -- Function-call argument: f(..., x, ...) where f is a known
+    -- size-consuming function (malloc, calloc, realloc, memcpy, memmove,
+    -- memset, alloca) -> the variable is used as a byte count.
+    CCall (CVar (Ident fname _ _) _) args _
+        | fname `elem` sizeArgFunctions
+        , any (isVarRef name) args -> [SizeType]
+
     _ -> []
+
+-- | True when the expression is a direct reference to the given variable.
+isVarRef :: String -> CExpression NodeInfo -> Bool
+isVarRef name (CVar (Ident n _ _) _) = n == name
+isVarRef _    _                       = False
 
 -- ---------------------------------------------------------------------------
 -- Declaration-initializer evidence
@@ -150,7 +162,7 @@ rhsEvidenceFor self env rhs = case rhs of
 
     -- ternary: classify both branches, take the stronger evidence
     CCond _ thenE elseE _
-        -> concatMap (rhsEvidenceFor self env) (maybe [] (:[]) thenE ++ [elseE])
+        -> concatMap (rhsEvidenceFor self env) (maybeToList thenE ++ [elseE])
 
     -- any other pointer-typed expression -> holds an address
     _ | isPtr (typeOfExpr env rhs) -> [PointerType]

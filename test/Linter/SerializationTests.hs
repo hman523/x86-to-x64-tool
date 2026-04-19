@@ -9,7 +9,7 @@ import Analysis.IssueTypes
 serializationLintSpec :: Spec
 serializationLintSpec = describe "Serialization Linting" $ do
   testLintWritingPtrDirectToFile
-  testLintWritingPtrContrainingStructsToFiles
+  testLintWritingPtrContainingStructsToFiles
   testLintSendingPtrsOverNetwork
   testLintPtrInMemoryMappedFiles
   testLintPtrInSharedMemory
@@ -23,14 +23,14 @@ testLintWritingPtrDirectToFile =
       lintSerializationIssues
       [WritingPtrDirectToFile]
 
-testLintWritingPtrContrainingStructsToFiles :: Spec
-testLintWritingPtrContrainingStructsToFiles =
-  describe "lintWritingPtrContrainingStructsToFiles" $ do
-    shouldLeaveUnresolved "leaves WritingPtrContrainingStructsToFiles unresolved"
+testLintWritingPtrContainingStructsToFiles :: Spec
+testLintWritingPtrContainingStructsToFiles =
+  describe "lintWritingPtrContainingStructsToFiles" $ do
+    shouldLeaveUnresolved "leaves WritingPtrContainingStructsToFiles unresolved"
       "struct S { int *p; }; void f() { struct S s; fwrite(&s, sizeof(s), 1, 0); }"
       analyzeSerializationIssues
       lintSerializationIssues
-      [WritingPtrContrainingStructsToFiles]
+      [WritingPtrContainingStructsToFiles]
 
 testLintSendingPtrsOverNetwork :: Spec
 testLintSendingPtrsOverNetwork =

@@ -1,4 +1,10 @@
-module Analysis.ConstantsLiterals where
+module Analysis.ConstantsLiterals
+  ( analyzeConstantsLiteralsIssues
+  , checkMagicValuesUsed
+  , checkBitMaskingAssuming32bitPts
+  , checkHardCodedAddressValues
+  , checkConstantsUsedForSizeCalcs
+  ) where
 
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (getCInteger)
@@ -6,6 +12,7 @@ import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
 import Analysis.TypeChecker
+import Analysis.KnownFunctions (allocFns)
 import qualified Data.Map as Map
 
 analyzeConstantsLiteralsIssues :: CTranslUnit -> [Issue]
@@ -22,7 +29,7 @@ checkMagicValuesUsed (CTranslUnit decls _) =
     concatMap (analyzeDecl checkExpr Map.empty) decls
   where
     checkExpr _env (CCall (CVar (Ident fname _ _) _) args info)
-        | fname `elem` ["malloc", "calloc", "realloc"] =
+        | fname `elem` allocFns =
             [ createIssue info Warning MagicValuesUsed
             | any isMagicSize args ]
     checkExpr _ _ = []
@@ -58,7 +65,7 @@ checkHardCodedAddressValues ast@(CTranslUnit decls _) =
   where
     checkExpr tenv _env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
-        in case (isPointer castTo, inner) of
+        in case (isPointer castTo, peelCastExpr inner) of
             (True, CConst (CIntConst n _))
                 | getCInteger n /= 0 ->
                     [createIssue info Critical HardCodedAddressValues]
@@ -67,13 +74,19 @@ checkHardCodedAddressValues ast@(CTranslUnit decls _) =
 
 -- | Flag assignments to size_t (TULong/TUInt) variables from a bare integer
 --   literal — a named constant or sizeof expression should be used instead.
+--   Small constants (0, 1) are excluded as they are ubiquitous and harmless.
 checkConstantsUsedForSizeCalcs :: CTranslUnit -> [Issue]
 checkConstantsUsedForSizeCalcs ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
     in concatMap (analyzeDecl (checkExpr tenv) Map.empty) decls
   where
-    checkExpr tenv env (CAssign CAssignOp lhs (CConst (CIntConst _ _)) info) =
+    checkExpr tenv env (CAssign CAssignOp lhs (CConst (CIntConst n _)) info) =
         let lhsType = resolveTypedef tenv (typeOfExpr env lhs)
         in [ createIssue info Warning ConstantsUsedForSizeCalcs
-           | isUIntType lhsType ]
+           | isSizeRelatedType lhsType && getCInteger n > 1 ]
     checkExpr _ _ _ = []
+
+    -- | Types commonly used for sizes/counts that are 64-bit on x64.
+    isSizeRelatedType TUInt  = True
+    isSizeRelatedType TULong = True
+    isSizeRelatedType _      = False

@@ -1,51 +1,54 @@
-module Linter.TypeSize where
+{-# LANGUAGE LambdaCase #-}
+module Linter.TypeSize
+  ( lintTypeSizeIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintTypeSizeIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintTypeSizeIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      CastPointerToInt   -> lintCastPointerToInt   a issue
-      CastPointerToUInt  -> lintCastPointerToUInt  a issue
-      CastIntToPointer   -> lintCastIntToPointer   a issue
-      CastLongToPointer  -> lintCastLongToPointer  a issue
-      SizeOfIntIsVoid    -> lintSizeOfIntIsVoid    a issue
-      SizeOfLongIsVoid   -> lintSizeOfLongIsVoid   a issue
-      UsingIntAsSizet    -> lintUsingIntAsSizet    a issue
-      UsingIntAsPtrdifft -> lintUsingIntAsPtrdifft a issue
-      UsingUIntAsMemSize -> lintUsingUIntAsMemSize a issue
-      _                  -> (a, Just issue)
+lintTypeSizeIssues = dispatchLinter $ \case
+    CastPointerToInt   -> Just lintCastPointerToInt
+    CastPointerToUInt  -> Just lintCastPointerToUInt
+    CastIntToPointer   -> Just lintCastIntToPointer
+    CastLongToPointer  -> Just lintCastLongToPointer
+    SizeOfIntIsVoid    -> Just lintSizeOfIntIsVoid
+    SizeOfLongIsVoid   -> Just lintSizeOfLongIsVoid
+    UsingIntAsSizet    -> Just lintUsingIntAsSizet
+    UsingIntAsPtrdifft -> Just lintUsingIntAsPtrdifft
+    UsingUIntAsMemSize -> Just lintUsingUIntAsMemSize
+    _                  -> Nothing
 
 -- ---------------------------------------------------------------------------
 -- Cast rewrites
 -- ---------------------------------------------------------------------------
 
 -- | (int)ptr  ->  (intptr_t)ptr
+--   Collapses any intermediate cast in a chain like @(int)(long)ptr@
+--   so the result is @(intptr_t)ptr@, not @(intptr_t)(long)ptr@.
 lintCastPointerToInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintCastPointerToInt ast issue =
-    (replaceCastType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
+    (replaceCastTypeCollapsing (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
 
 -- | (unsigned int)ptr  ->  (uintptr_t)ptr
+--   Collapses any intermediate cast in a chain like @(unsigned int)(long)ptr@.
 lintCastPointerToUInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintCastPointerToUInt ast issue =
-    (replaceCastType (issuePos issue) (typedefSpec "uintptr_t") ast, Nothing)
+    (replaceCastTypeCollapsing (issuePos issue) (typedefSpec "uintptr_t") ast, Nothing)
 
--- | (int*)x  ->  (intptr_t)x  [keeps the inner value; caller must cast to ptr]
+-- Cannot be done automatically: (int*)x casts an integer to a pointer type.
+-- Replacing the cast with (intptr_t)x would change the result from a pointer
+-- to an integer, breaking any subsequent dereference.  The correct fix depends
+-- on whether the code intends to form a valid pointer or just store a value.
 lintCastIntToPointer :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintCastIntToPointer ast issue =
-    (replaceCastType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
+lintCastIntToPointer = unlintable
 
--- | (T*)long  ->  (intptr_t)long
+-- Cannot be done automatically: (T*)long casts a long to a pointer type.
+-- Replacing with (intptr_t)long changes the result from pointer to integer,
+-- breaking subsequent dereferences.  Requires understanding the code's intent.
 lintCastLongToPointer :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintCastLongToPointer ast issue =
-    (replaceCastType (issuePos issue) (typedefSpec "intptr_t") ast, Nothing)
+lintCastLongToPointer = unlintable
 
 -- Cannot be done automatically: sizeof(int) == sizeof(void*) was true on
 -- 32-bit but is false on 64-bit. The condition guards code that assumes

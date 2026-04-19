@@ -143,9 +143,12 @@ stripLongSuffixes rmap = everywhere (mkT fixDecl) . everywhere (mkT fixAssign)
         | is32bit n = CAssign op lhs (stripLong rhs) ni
     fixAssign e = e
 
-    -- Strip FlagLong from a CIntConst if present
+    -- Strip FlagLong from all CIntConst nodes in an expression tree
     stripLong :: CExpression NodeInfo -> CExpression NodeInfo
     stripLong (CConst (CIntConst (CInteger val repr flags) ci))
         | testFlag FlagLong flags
         = CConst (CIntConst (CInteger val repr (clearFlag FlagLong flags)) ci)
+    stripLong (CBinary op l r ni) = CBinary op (stripLong l) (stripLong r) ni
+    stripLong (CUnary op e ni)    = CUnary op (stripLong e) ni
+    stripLong (CCast decl e ni)   = CCast decl (stripLong e) ni
     stripLong e = e

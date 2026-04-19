@@ -51,6 +51,11 @@ constantsLiteralsSpec = describe "ConstantsLiterals Analysis" $ do
             "void foo() { int *p = (int*)0; }"
             checkHardCodedAddressValues
 
+        shouldFlagError
+            "chained cast: (int*)(long)0xDEAD still detected"
+            "void foo() { int *p = (int*)(long)0xDEAD; }"
+            checkHardCodedAddressValues
+
     describe "checkConstantsUsedForSizeCalcs" $ do
         shouldFlagError
             "flags literal assigned to unsigned long (size_t) variable"

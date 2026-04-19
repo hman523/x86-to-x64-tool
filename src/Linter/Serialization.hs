@@ -1,23 +1,20 @@
-module Linter.Serialization where
+{-# LANGUAGE LambdaCase #-}
+module Linter.Serialization
+  ( lintSerializationIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintSerializationIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintSerializationIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      WritingPtrDirectToFile              -> lintWritingPtrDirectToFile              a issue
-      WritingPtrContrainingStructsToFiles -> lintWritingPtrContrainingStructsToFiles a issue
-      SendingPtrsOverNetwork              -> lintSendingPtrsOverNetwork              a issue
-      PtrInMemoryMappedFiles              -> lintPtrInMemoryMappedFiles              a issue
-      PtrInSharedMemory                   -> lintPtrInSharedMemory                   a issue
-      _                                   -> (a, Just issue)
+lintSerializationIssues = dispatchLinter $ \case
+    WritingPtrDirectToFile              -> Just lintWritingPtrDirectToFile
+    WritingPtrContainingStructsToFiles -> Just lintWritingPtrContainingStructsToFiles
+    SendingPtrsOverNetwork              -> Just lintSendingPtrsOverNetwork
+    PtrInMemoryMappedFiles              -> Just lintPtrInMemoryMappedFiles
+    PtrInSharedMemory                   -> Just lintPtrInSharedMemory
+    _                                   -> Nothing
 
 -- Cannot be done automatically: a raw pointer value is process-local and
 -- meaningless once deserialized. Fixing this requires switching to a portable
@@ -32,8 +29,8 @@ lintWritingPtrDirectToFile = unlintable
 -- across process boundaries or address-space layouts. The programmer must
 -- define a format that replaces pointers with relocatable representations
 -- (offsets, indices, etc.).
-lintWritingPtrContrainingStructsToFiles :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintWritingPtrContrainingStructsToFiles = unlintable
+lintWritingPtrContainingStructsToFiles :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+lintWritingPtrContainingStructsToFiles = unlintable
 
 -- Cannot be done automatically: pointer values are virtual addresses in the
 -- sending process's address space and are meaningless to the receiver. The

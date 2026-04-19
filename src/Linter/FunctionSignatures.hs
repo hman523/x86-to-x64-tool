@@ -1,25 +1,22 @@
-module Linter.FunctionSignatures where
+{-# LANGUAGE LambdaCase #-}
+module Linter.FunctionSignatures
+  ( lintFunctionSignaturesIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintFunctionSignaturesIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintFunctionSignaturesIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      FnsReturnPtrAsInt                    -> lintFnsReturnPtrAsInt                    a issue
-      FnsReturnPtrAsUInt                   -> lintFnsReturnPtrAsUInt                   a issue
-      FnsReturnPtrAsLong                   -> lintFnsReturnPtrAsLong                   a issue
-      FnsParamDeclaredAsIntTakesPtr        -> lintFnsParamDeclaredAsIntTakesPtr        a issue
-      FnsParamDeclaredAsUIntTakesPtr       -> lintFnsParamDeclaredAsUIntTakesPtr       a issue
-      VaargUsingWrongTypesForPtrArgs       -> lintVaargUsingWrongTypesForPtrArgs       a issue
-      VaargUsingWrongTypesForPtrArgsUInt   -> lintVaargUsingWrongTypesForPtrArgsUInt   a issue
-      _                              -> (a, Just issue)
+lintFunctionSignaturesIssues = dispatchLinter $ \case
+    FnsReturnPtrAsInt                    -> Just lintFnsReturnPtrAsInt
+    FnsReturnPtrAsUInt                   -> Just lintFnsReturnPtrAsUInt
+    FnsReturnPtrAsLong                   -> Just lintFnsReturnPtrAsLong
+    FnsParamDeclaredAsIntTakesPtr        -> Just lintFnsParamDeclaredAsIntTakesPtr
+    FnsParamDeclaredAsUIntTakesPtr       -> Just lintFnsParamDeclaredAsUIntTakesPtr
+    VaargUsingWrongTypesForPtrArgs       -> Just lintVaargUsingWrongTypesForPtrArgs
+    VaargUsingWrongTypesForPtrArgsUInt   -> Just lintVaargUsingWrongTypesForPtrArgsUInt
+    _                                    -> Nothing
 
 lintFnsReturnPtrAsInt :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 lintFnsReturnPtrAsInt ast issue =

@@ -75,7 +75,7 @@ hasExactlyOneLong specs =
 
 -- | True when the specifier list contains an @unsigned@ qualifier.
 hasUnsignedSpec :: [CDeclarationSpecifier a] -> Bool
-hasUnsignedSpec specs = any isU specs
+hasUnsignedSpec = any isU
   where
     isU (CTypeSpec (CUnsigType _)) = True
     isU _                          = False

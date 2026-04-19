@@ -1,6 +1,19 @@
-module Linter.FormatStrings where
+{-# LANGUAGE LambdaCase #-}
+module Linter.FormatStrings
+  ( lintFormatStringsIssues
+  , lintDUsedWithSizet
+  , lintUUsedWithSizet
+  , lintXUsedWithSizet
+  , lintDUsedWithPtrdifft
+  , lintUUsedWithPtrdifft
+  , lintDUsedWithPtr
+  , lintUUsedWithPtr
+  , lintXUsedWithPtr
+  , lintLuUsedForPtrSizedVals
+  , lintLdUsedWithLongAssuming64bits
+  ) where
 
-import Data.Generics (everywhere, mkT)
+import Data.Generics (everywhere, mkT, everything, mkQ)
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants (CString(..))
 import Language.C.Data.Node (NodeInfo)
@@ -8,6 +21,7 @@ import Language.C.Data.Position (posOf)
 import Language.C.Data.Ident (Ident(..))
 import Analysis.IssueTypes
 import Analysis.FormatStrings (fmtArgIndex)
+import Linter.Helpers (dispatchLinter)
 import Parser.FormatSpecParser (parseLenMod)
 
 -- ---------------------------------------------------------------------------
@@ -15,24 +29,18 @@ import Parser.FormatSpecParser (parseLenMod)
 -- ---------------------------------------------------------------------------
 
 lintFormatStringsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintFormatStringsIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      DUsedWithSizet               -> lintDUsedWithSizet               a issue
-      UUsedWithSizet               -> lintUUsedWithSizet               a issue
-      XUsedWithSizet               -> lintXUsedWithSizet               a issue
-      DUsedWithPtrdifft            -> lintDUsedWithPtrdifft            a issue
-      UUsedWithPtrdifft            -> lintUUsedWithPtrdifft            a issue
-      DUsedWithPtr                 -> lintDUsedWithPtr                 a issue
-      UUsedWithPtr                 -> lintUUsedWithPtr                 a issue
-      XUsedWithPtr                 -> lintXUsedWithPtr                 a issue
-      LuUsedForPtrSizedVals        -> lintLuUsedForPtrSizedVals        a issue
-      LdUsedWithLongAssuming64bits -> lintLdUsedWithLongAssuming64bits a issue
-      _                            -> (a, Just issue)
+lintFormatStringsIssues = dispatchLinter $ \case
+    DUsedWithSizet               -> Just lintDUsedWithSizet
+    UUsedWithSizet               -> Just lintUUsedWithSizet
+    XUsedWithSizet               -> Just lintXUsedWithSizet
+    DUsedWithPtrdifft            -> Just lintDUsedWithPtrdifft
+    UUsedWithPtrdifft            -> Just lintUUsedWithPtrdifft
+    DUsedWithPtr                 -> Just lintDUsedWithPtr
+    UUsedWithPtr                 -> Just lintUUsedWithPtr
+    XUsedWithPtr                 -> Just lintXUsedWithPtr
+    LuUsedForPtrSizedVals        -> Just lintLuUsedForPtrSizedVals
+    LdUsedWithLongAssuming64bits -> Just lintLdUsedWithLongAssuming64bits
+    _                            -> Nothing
 
 -- ---------------------------------------------------------------------------
 -- Per-tag linters
@@ -40,50 +48,67 @@ lintFormatStringsIssues ast issues = foldl applyOne (ast, []) issues
 -- ---------------------------------------------------------------------------
 
 lintDUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintDUsedWithSizet ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'd') ("z", 'd') ast, Nothing)
+lintDUsedWithSizet = tryFixFmtSpec ("", 'd') ("z", 'd')
 
 lintUUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintUUsedWithSizet ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'u') ("z", 'u') ast, Nothing)
+lintUUsedWithSizet = tryFixFmtSpec ("", 'u') ("z", 'u')
 
 lintXUsedWithSizet :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintXUsedWithSizet ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'x') ("z", 'x') ast, Nothing)
+lintXUsedWithSizet = tryFixFmtSpec ("", 'x') ("z", 'x')
 
 lintDUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintDUsedWithPtrdifft ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'd') ("t", 'd') ast, Nothing)
+lintDUsedWithPtrdifft = tryFixFmtSpec ("", 'd') ("t", 'd')
 
 lintUUsedWithPtrdifft :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintUUsedWithPtrdifft ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'u') ("t", 'u') ast, Nothing)
+lintUUsedWithPtrdifft = tryFixFmtSpec ("", 'u') ("t", 'u')
 
 -- Pointers should use %p; length modifier is dropped, conv changes to 'p'
 lintDUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintDUsedWithPtr ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'd') ("", 'p') ast, Nothing)
+lintDUsedWithPtr = tryFixFmtSpec ("", 'd') ("", 'p')
 
 lintUUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintUUsedWithPtr ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'u') ("", 'p') ast, Nothing)
+lintUUsedWithPtr = tryFixFmtSpec ("", 'u') ("", 'p')
 
 lintXUsedWithPtr :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintXUsedWithPtr ast issue =
-    (fixFmtSpec (issuePos issue) ("", 'x') ("", 'p') ast, Nothing)
+lintXUsedWithPtr = tryFixFmtSpec ("", 'x') ("", 'p')
 
 lintLuUsedForPtrSizedVals :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintLuUsedForPtrSizedVals ast issue =
-    (fixFmtSpec (issuePos issue) ("l", 'u') ("z", 'u') ast, Nothing)
+lintLuUsedForPtrSizedVals = tryFixFmtSpec ("l", 'u') ("z", 'u')
 
 -- %ld assumes long is 64-bit; portable replacement is %td (ptrdiff_t)
 lintLdUsedWithLongAssuming64bits :: CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
-lintLdUsedWithLongAssuming64bits ast issue =
-    (fixFmtSpec (issuePos issue) ("l", 'd') ("t", 'd') ast, Nothing)
+lintLdUsedWithLongAssuming64bits = tryFixFmtSpec ("l", 'd') ("t", 'd')
 
 -- ---------------------------------------------------------------------------
 -- AST walking helpers
 -- ---------------------------------------------------------------------------
+
+-- | Attempt to fix a format specifier.  If the call site at the issue's
+-- position has a string-literal format argument, apply the fix and return
+-- @Nothing@ (resolved).  Otherwise return the issue unchanged (unresolved).
+tryFixFmtSpec :: (String, Char) -> (String, Char)
+              -> CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
+tryFixFmtSpec old new ast issue
+    | hasPatchableFmt (issuePos issue) ast =
+        (fixFmtSpec (issuePos issue) old new ast, Nothing)
+    | otherwise = (ast, Just issue)
+
+-- | True when the AST contains a printf-family call at the given position
+-- whose format argument is a string literal that can be patched.
+hasPatchableFmt :: NodeInfo -> CTranslUnit -> Bool
+hasPatchableFmt targetInfo = everything (||) (mkQ False check)
+  where
+    check :: CExpression NodeInfo -> Bool
+    check (CCall callee args info)
+        | posOf info == posOf targetInfo
+        , CVar (Ident fname _ _) _ <- callee
+        , Just idx <- fmtArgIndex fname
+        , (_, fmtExpr : _) <- splitAt idx args
+        = isStrLit fmtExpr
+    check _ = False
+
+    isStrLit (CConst (CStrConst _ _)) = True
+    isStrLit _                        = False
 
 -- | Walk the entire AST with 'everywhere', find the CCall at the given source
 -- position, and patch the format string literal by replacing the first

@@ -1,22 +1,19 @@
-module Linter.ConstantsLiterals where
+{-# LANGUAGE LambdaCase #-}
+module Linter.ConstantsLiterals
+  ( lintConstantsLiteralsIssues
+  ) where
 
 import Language.C.Syntax.AST
 import Analysis.IssueTypes
 import Linter.Helpers
 
 lintConstantsLiteralsIssues :: CTranslUnit -> [Issue] -> (CTranslUnit, [Issue])
-lintConstantsLiteralsIssues ast issues = foldl applyOne (ast, []) issues
-  where
-    applyOne (a, unresolved) issue =
-      let (a', mi) = dispatch a issue
-      in (a', maybe unresolved (: unresolved) mi)
-
-    dispatch a issue = case issueType issue of
-      MagicValuesUsed            -> lintMagicValuesUsed            a issue
-      BitMaskingAssuming32bitPts -> lintBitMaskingAssuming32bitPts a issue
-      HardCodedAddressValues     -> lintHardCodedAddressValues     a issue
-      ConstantsUsedForSizeCalcs  -> lintConstantsUsedForSizeCalcs  a issue
-      _                          -> (a, Just issue)
+lintConstantsLiteralsIssues = dispatchLinter $ \case
+    MagicValuesUsed            -> Just lintMagicValuesUsed
+    BitMaskingAssuming32bitPts -> Just lintBitMaskingAssuming32bitPts
+    HardCodedAddressValues     -> Just lintHardCodedAddressValues
+    ConstantsUsedForSizeCalcs  -> Just lintConstantsUsedForSizeCalcs
+    _                          -> Nothing
 
 -- Cannot be done automatically: malloc(4) or malloc(8) uses a literal that
 -- likely encodes an assumed pointer size. The correct replacement is

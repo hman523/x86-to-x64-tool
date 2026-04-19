@@ -8,7 +8,9 @@
 module X86_to_X64
     ( -- * File-based entry points
       analyzeFile
+    , analyzeFileWithCPP
     , lintFile
+    , lintFileWithCPP
     , transformFile
     , transformFileWithCPP
       -- * String-based entry points
@@ -19,6 +21,7 @@ module X86_to_X64
     , Issue(..)
     , IssueTag(..)
     , Severity(..)
+    , Category(..)
     , prettyPrintIssues
     ) where
 
@@ -27,7 +30,8 @@ import Text.PrettyPrint      (render)
 
 import Parser.Parser              (parseSourceFile, parseSourceFileWithCPP, parseSourceString)
 import Analysis.Analysis          (analysis)
-import Analysis.IssueTypes        (Issue(..), IssueTag(..), Severity(..), prettyPrintIssues)
+import Analysis.IssueTypes        (Issue(..), IssueTag(..), Severity(..), Category(..),
+                                   prettyPrintIssues)
 import Linter.Linter              (lint)
 import Transformer.Transformer    (transform, addRequiredIncludes)
 
@@ -44,6 +48,15 @@ analyzeFile path = do
         Left err  -> Left (show err)
         Right ast -> Right (analysis ast)
 
+-- | Like 'analyzeFile', but runs the C preprocessor (GCC) first.
+--   This is needed for source files that use @#include@ directives or macros.
+analyzeFileWithCPP :: FilePath -> IO (Either String [Issue])
+analyzeFileWithCPP path = do
+    result <- parseSourceFileWithCPP path
+    return $ case result of
+        Left err  -> Left (show err)
+        Right ast -> Right (analysis ast)
+
 -- | Parse, analyse, and lint a C source file.
 --   Returns @Left errMsg@ on a parse failure, otherwise
 --   @Right (lintedSource, unresolvedIssues)@.
@@ -55,7 +68,18 @@ lintFile path = do
         Right ast ->
             let issues              = analysis ast
                 (ast', unresolved)  = lint ast issues
-            in Right (render (pretty ast'), unresolved)
+            in Right (addRequiredIncludes (render (pretty ast')), unresolved)
+
+-- | Like 'lintFile', but runs the C preprocessor (GCC) first.
+lintFileWithCPP :: FilePath -> IO (Either String (String, [Issue]))
+lintFileWithCPP path = do
+    result <- parseSourceFileWithCPP path
+    return $ case result of
+        Left err  -> Left (show err)
+        Right ast ->
+            let issues              = analysis ast
+                (ast', unresolved)  = lint ast issues
+            in Right (addRequiredIncludes (render (pretty ast')), unresolved)
 
 -- ---------------------------------------------------------------------------
 -- String-based entry points
@@ -77,7 +101,7 @@ lintSource src = case parseSourceString src of
     Right ast ->
         let issues             = analysis ast
             (ast', unresolved) = lint ast issues
-        in Right (render (pretty ast'), unresolved)
+        in Right (addRequiredIncludes (render (pretty ast')), unresolved)
 
 -- ---------------------------------------------------------------------------
 -- Transformer entry points
