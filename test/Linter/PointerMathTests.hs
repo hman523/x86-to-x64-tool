@@ -23,6 +23,11 @@ testLintPtrDiffStoredAs32bit =
       analyzePointerMathIssues
       lintPointerMathIssues
       "ptrdiff_t"
+    shouldLintExactly "exact output for int ptr-diff rewrite to ptrdiff_t"
+      "void f() { int *p = 0; int *q = 0; int d; d = p - q; }"
+      analyzePointerMathIssues
+      lintPointerMathIssues
+      "void f() { int * p = 0; int * q = 0; ptrdiff_t d; d = p - q; }"
 
 testLintPointerAddOverflow :: Spec
 testLintPointerAddOverflow =
@@ -50,6 +55,11 @@ testLintArrayIndexingIntInArrayOver2tothe31size =
       analyzePointerMathIssues
       lintPointerMathIssues
       "ptrdiff_t"
+    shouldLintExactly "exact output for int array index rewrite to ptrdiff_t"
+      "void f() { int arr[10]; int i = 0; int x = arr[i]; }"
+      analyzePointerMathIssues
+      lintPointerMathIssues
+      "void f() { int arr[10]; ptrdiff_t i = 0; int x = arr[i]; }"
 
 -- | Pointer-math linting should find and rewrite variables in nested scopes.
 testLintScopedPointerMath :: Spec
@@ -62,6 +72,12 @@ testLintScopedPointerMath =
         analyzePointerMathIssues
         lintPointerMathIssues
         "ptrdiff_t"
+    shouldLintExactly
+        "exact output for ptr-diff in if-block rewrite to ptrdiff_t"
+        "void f(int *p, int *q) { if (p) { int d; d = p - q; } }"
+        analyzePointerMathIssues
+        lintPointerMathIssues
+        "void f(int * p, int * q) { if (p) { ptrdiff_t d; d = p - q; } }"
 
     shouldLintTo
         "int storing ptr-diff inside while body is rewritten to ptrdiff_t"
@@ -110,6 +126,12 @@ testLintScopedPointerMathEdgeCases =
         analyzePointerMathIssues
         lintPointerMathIssues
         "ptrdiff_t"
+    shouldLintExactly
+        "exact output for ptr-diff in switch case rewrite to ptrdiff_t"
+        "void f(int *p, int *q, int n) { switch (n) { case 1: { int d; d = p - q; break; } } }"
+        analyzePointerMathIssues
+        lintPointerMathIssues
+        "void f(int * p, int * q, int n) { switch (n) { case 1: { ptrdiff_t d; d = p - q; break; } } }"
 
     -- Array index in switch case
     shouldLintTo

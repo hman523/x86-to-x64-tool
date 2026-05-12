@@ -20,6 +20,11 @@ testLintLoopCounterAsIntWhenIteratingOverPtrArrays =
       analyzeComparisonIssues
       lintComparisonIssues
       "ptrdiff_t"
+    shouldLintExactly "exact output for loop counter rewrite"
+      "void f() { int *p = 0; int *q = 0; for (int i = 0; i < (p - q); i++) { } }"
+      analyzeComparisonIssues
+      lintComparisonIssues
+      "void f() { int * p = 0; int * q = 0; for (ptrdiff_t i = 0; i < p - q; i++) { } }"
 
 testLintPtrComparisonWithIntConsts :: Spec
 testLintPtrComparisonWithIntConsts =
@@ -38,3 +43,8 @@ testLintUsingIntForFileOffsets =
       analyzeComparisonIssues
       lintComparisonIssues
       "off_t"
+    shouldLintExactly "exact output for fseek offset rewrite"
+      "void f() { int offset = 0; fseek(0, offset, 0); }"
+      analyzeComparisonIssues
+      lintComparisonIssues
+      "void f() { off_t offset = 0; fseek(0, offset, 0); }"

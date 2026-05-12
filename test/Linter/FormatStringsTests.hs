@@ -33,6 +33,12 @@ testLintDUsedWithSizet =
       checkdUsedWithSizet
       lintFormatStringsIssues
       "%zd"
+    shouldLintExactly
+      "exact output replaces %d with %zd for size_t arg"
+      "void foo() { unsigned long sz; printf(\"%d\", sz); }"
+      checkdUsedWithSizet
+      lintFormatStringsIssues
+      "void foo() { unsigned long sz; printf(\"%zd\", sz); }"
     shouldResolveIssue
       "resolves %d with size_t when flags and width present (e.g. %-10d)"
       "void foo() { unsigned long sz; printf(\"%-10d\", sz); }"
@@ -53,6 +59,12 @@ testLintUUsedWithSizet =
       checkuUsedWithSizet
       lintFormatStringsIssues
       "%zu"
+    shouldLintExactly
+      "exact output replaces %u with %zu for size_t arg"
+      "void foo() { unsigned long sz; printf(\"%u\", sz); }"
+      checkuUsedWithSizet
+      lintFormatStringsIssues
+      "void foo() { unsigned long sz; printf(\"%zu\", sz); }"
 
 testLintXUsedWithSizet :: Spec
 testLintXUsedWithSizet =
@@ -68,6 +80,12 @@ testLintXUsedWithSizet =
       checkxUsedWithSizet
       lintFormatStringsIssues
       "%zx"
+    shouldLintExactly
+      "exact output replaces %x with %zx for size_t arg"
+      "void foo() { unsigned long sz; printf(\"%x\", sz); }"
+      checkxUsedWithSizet
+      lintFormatStringsIssues
+      "void foo() { unsigned long sz; printf(\"%zx\", sz); }"
 
 testLintDUsedWithPtrdifft :: Spec
 testLintDUsedWithPtrdifft =
@@ -83,6 +101,12 @@ testLintDUsedWithPtrdifft =
       checkdUsedWithPtrdifft
       lintFormatStringsIssues
       "%td"
+    shouldLintExactly
+      "exact output replaces %d with %td for ptrdiff_t arg"
+      "void foo() { long n; printf(\"%d\", n); }"
+      checkdUsedWithPtrdifft
+      lintFormatStringsIssues
+      "void foo() { long n; printf(\"%td\", n); }"
 
 testLintUUsedWithPtrdifft :: Spec
 testLintUUsedWithPtrdifft =
@@ -98,6 +122,12 @@ testLintUUsedWithPtrdifft =
       checkuUsedWithPtrdifft
       lintFormatStringsIssues
       "%tu"
+    shouldLintExactly
+      "exact output replaces %u with %tu for ptrdiff_t arg"
+      "void foo() { long n; printf(\"%u\", n); }"
+      checkuUsedWithPtrdifft
+      lintFormatStringsIssues
+      "void foo() { long n; printf(\"%tu\", n); }"
 
 testLintDUsedWithPtr :: Spec
 testLintDUsedWithPtr =
@@ -113,6 +143,12 @@ testLintDUsedWithPtr =
       checkdUsedWithPtr
       lintFormatStringsIssues
       "%p"
+    shouldLintExactly
+      "exact output replaces %d with %p for pointer arg"
+      "void foo() { int *p; printf(\"%d\", p); }"
+      checkdUsedWithPtr
+      lintFormatStringsIssues
+      "void foo() { int * p; printf(\"%p\", p); }"
 
 testLintUUsedWithPtr :: Spec
 testLintUUsedWithPtr =
@@ -128,6 +164,12 @@ testLintUUsedWithPtr =
       checkuUsedWithPtr
       lintFormatStringsIssues
       "%p"
+    shouldLintExactly
+      "exact output replaces %u with %p for pointer arg"
+      "void foo() { int *p; printf(\"%u\", p); }"
+      checkuUsedWithPtr
+      lintFormatStringsIssues
+      "void foo() { int * p; printf(\"%p\", p); }"
 
 testLintXUsedWithPtr :: Spec
 testLintXUsedWithPtr =
@@ -143,6 +185,12 @@ testLintXUsedWithPtr =
       checkxUsedWithPtr
       lintFormatStringsIssues
       "%p"
+    shouldLintExactly
+      "exact output replaces %x with %p for pointer arg"
+      "void foo() { int *p; printf(\"%x\", p); }"
+      checkxUsedWithPtr
+      lintFormatStringsIssues
+      "void foo() { int * p; printf(\"%p\", p); }"
 
 testLintLuUsedForPtrSizedVals :: Spec
 testLintLuUsedForPtrSizedVals =
@@ -158,6 +206,12 @@ testLintLuUsedForPtrSizedVals =
       checkluUsedForPtrSizedVals
       lintFormatStringsIssues
       "%zu"
+    shouldLintExactly
+      "exact output replaces %lu with %zu for pointer arg"
+      "void foo() { int *p; printf(\"%lu\", p); }"
+      checkluUsedForPtrSizedVals
+      lintFormatStringsIssues
+      "void foo() { int * p; printf(\"%zu\", p); }"
 
 testLintLdUsedWithLongAssuming64bits :: Spec
 testLintLdUsedWithLongAssuming64bits =
@@ -173,6 +227,12 @@ testLintLdUsedWithLongAssuming64bits =
       checkldUsedWithLongAssuming64bits
       lintFormatStringsIssues
       "%td"
+    shouldLintExactly
+      "exact output replaces %ld with %td for long arg"
+      "void foo() { long n; printf(\"%ld\", n); }"
+      checkldUsedWithLongAssuming64bits
+      lintFormatStringsIssues
+      "void foo() { long n; printf(\"%td\", n); }"
 
 testFormatStringsIntegration :: Spec
 testFormatStringsIntegration =

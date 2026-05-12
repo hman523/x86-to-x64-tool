@@ -23,6 +23,11 @@ testLintFnsReturnPtrAsInt =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "intptr_t"
+    shouldLintExactly "exact output for pointer return cast to intptr_t"
+      "int f() { int *ptr = 0; return ptr; }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "int f() { int * ptr = 0; return (intptr_t) ptr; }"
 
 testLintFnsReturnPtrAsUInt :: Spec
 testLintFnsReturnPtrAsUInt =
@@ -32,6 +37,11 @@ testLintFnsReturnPtrAsUInt =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "uintptr_t"
+    shouldLintExactly "exact output for pointer return cast to uintptr_t"
+      "unsigned int f() { int *ptr = 0; return ptr; }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "unsigned int f() { int * ptr = 0; return (uintptr_t) ptr; }"
 
 testLintFnsReturnPtrAsLong :: Spec
 testLintFnsReturnPtrAsLong =
@@ -41,6 +51,11 @@ testLintFnsReturnPtrAsLong =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "intptr_t"
+    shouldLintExactly "exact output for long return cast to intptr_t"
+      "long f() { int *ptr = 0; return ptr; }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "long f() { int * ptr = 0; return (intptr_t) ptr; }"
 
 testLintFnsParamDeclaredAsIntTakesPtr :: Spec
 testLintFnsParamDeclaredAsIntTakesPtr =
@@ -50,6 +65,11 @@ testLintFnsParamDeclaredAsIntTakesPtr =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "intptr_t"
+    shouldLintExactly "exact output for int param rewrite to intptr_t"
+      "void f(int p) { int *q = 0; p = q; }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "void f(intptr_t p) { int * q = 0; p = q; }"
 
 testLintFnsParamDeclaredAsUIntTakesPtr :: Spec
 testLintFnsParamDeclaredAsUIntTakesPtr =
@@ -59,6 +79,11 @@ testLintFnsParamDeclaredAsUIntTakesPtr =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "uintptr_t"
+    shouldLintExactly "exact output for unsigned int param rewrite to uintptr_t"
+      "void f(unsigned int p) { int *q = 0; p = q; }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "void f(uintptr_t p) { int * q = 0; p = q; }"
 
 testLintVaargUsingWrongTypesForPtrArgs :: Spec
 testLintVaargUsingWrongTypesForPtrArgs =
@@ -68,6 +93,11 @@ testLintVaargUsingWrongTypesForPtrArgs =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "intptr_t"
+    shouldLintExactly "exact output for va_arg int rewrite to intptr_t"
+      "void f(__builtin_va_list ap) { int x = __builtin_va_arg(ap, int); }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "void f(__builtin_va_list ap) { int x = __builtin_va_arg (ap, intptr_t); }"
 
 testLintVaargUsingWrongTypesForPtrArgsUInt :: Spec
 testLintVaargUsingWrongTypesForPtrArgsUInt =
@@ -77,3 +107,8 @@ testLintVaargUsingWrongTypesForPtrArgsUInt =
       analyzeFunctionSignatureIssues
       lintFunctionSignaturesIssues
       "uintptr_t"
+    shouldLintExactly "exact output for va_arg unsigned int rewrite to uintptr_t"
+      "void f(__builtin_va_list ap) { unsigned int x = __builtin_va_arg(ap, unsigned int); }"
+      analyzeFunctionSignatureIssues
+      lintFunctionSignaturesIssues
+      "void f(__builtin_va_list ap) { unsigned int x = __builtin_va_arg (ap, uintptr_t); }"

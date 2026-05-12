@@ -83,6 +83,24 @@ shouldLintNotTo name code analyser linter absent =
         let (ast', _) = linter ast issues
         render (pretty ast') `shouldNotContain` absent
 
+-- | Parse source, run the analyser, run the linter, and assert the
+-- pretty-printed output exactly equals the expected string.
+shouldLintExactly
+  :: String
+  -> String
+  -> (CTranslUnit -> [Issue])
+  -> (CTranslUnit -> [Issue] -> (CTranslUnit, [Issue]))
+  -> String                                             -- ^ expected full output
+  -> Spec
+shouldLintExactly name code analyser linter expected =
+  it name $ do
+    case parseSourceString code of
+      Left err  -> fail (show err)
+      Right ast -> do
+        let issues = analyser ast
+        let (ast', _) = linter ast issues
+        (unwords . words) (render (pretty ast')) `shouldBe` (unwords . words) expected
+
 -- | Assert that the linter leaves exactly the listed tags unresolved
 -- (order-insensitive).
 shouldLeaveUnresolved

@@ -33,6 +33,11 @@ testLintCastPointerToInt =
       analyzeTypeSizeIssues
       lintTypeSizeIssues
       "intptr_t"
+    shouldLintExactly "exact output for (int)ptr rewrite to intptr_t"
+      "int main() { int *ptr = 0; int x = (int)ptr; return 0; }"
+      analyzeTypeSizeIssues
+      lintTypeSizeIssues
+      "int main() { int * ptr = 0; int x = (intptr_t) ptr; return 0; }"
     shouldLeaveUnresolved "leaves unresolvable sizeof issue alone when linting cast"
       "int main() { int *ptr = 0; int x = (int)ptr; if (sizeof(int) == sizeof(void*)) return 1; return 0; }"
       analyzeTypeSizeIssues
@@ -47,6 +52,11 @@ testLintCastPointerToUInt =
       analyzeTypeSizeIssues
       lintTypeSizeIssues
       "uintptr_t"
+    shouldLintExactly "exact output for (unsigned int)ptr rewrite to uintptr_t"
+      "int main() { int *ptr = 0; unsigned int x = (unsigned int)ptr; return 0; }"
+      analyzeTypeSizeIssues
+      lintTypeSizeIssues
+      "int main() { int * ptr = 0; unsigned int x = (uintptr_t) ptr; return 0; }"
 
 testLintCastIntToPointer :: Spec
 testLintCastIntToPointer =
@@ -92,6 +102,11 @@ testLintUsingIntAsSizet =
       analyzeTypeSizeIssues
       lintTypeSizeIssues
       "size_t"
+    shouldLintExactly "exact output for unsigned long size variable rewrite to size_t"
+      "int main() { int x = 5; unsigned long size; size = x; return 0; }"
+      analyzeTypeSizeIssues
+      lintTypeSizeIssues
+      "int main() { int x = 5; size_t size; size = x; return 0; }"
 
 testLintUsingIntAsPtrdifft :: Spec
 testLintUsingIntAsPtrdifft =
@@ -101,6 +116,11 @@ testLintUsingIntAsPtrdifft =
       analyzeTypeSizeIssues
       lintTypeSizeIssues
       "ptrdiff_t"
+    shouldLintExactly "exact output for long diff variable rewrite to ptrdiff_t"
+      "int main() { int x = 5; long diff; diff = x; return 0; }"
+      analyzeTypeSizeIssues
+      lintTypeSizeIssues
+      "int main() { int x = 5; ptrdiff_t diff; diff = x; return 0; }"
 
 testLintUsingUIntAsMemSize :: Spec
 testLintUsingUIntAsMemSize =
@@ -110,6 +130,11 @@ testLintUsingUIntAsMemSize =
       analyzeTypeSizeIssues
       lintTypeSizeIssues
       "size_t"
+    shouldLintExactly "exact output for unsigned int malloc arg rewrite to size_t"
+      "int main() { unsigned int size = 10; void *ptr = malloc(size); return 0; }"
+      analyzeTypeSizeIssues
+      lintTypeSizeIssues
+      "int main() { size_t size = 10; void * ptr = malloc(size); return 0; }"
 
 -- | A single C function that triggers all four resolvable TypeSize issue
 -- kinds plus one unresolvable sizeof comparison.  The linter should
@@ -189,6 +214,12 @@ testLintScopedIssues =
         analyzeTypeSizeIssues
         lintTypeSizeIssues
         "intptr_t"
+    shouldLintExactly
+        "exact output for (int)ptr in if-block rewrite to intptr_t"
+        "void f(void *p) { if (1) { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "void f(void * p) { if (1) { int x = (intptr_t) p; } }"
 
     shouldLeaveUnresolved
         "(int*)long in while body is left unresolved"
@@ -203,6 +234,12 @@ testLintScopedIssues =
         analyzeTypeSizeIssues
         lintTypeSizeIssues
         "size_t"
+    shouldLintExactly
+        "exact output for unsigned long sz in if-block rewrite to size_t"
+        "void f(int n) { if (n > 0) { unsigned long sz; sz = n; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "void f(int n) { if (n > 0) { size_t sz; sz = n; } }"
 
     shouldFullyLint
         "casts in two separate functions are both linted"
@@ -229,6 +266,12 @@ testLintChainedCasts =
         analyzeTypeSizeIssues
         lintTypeSizeIssues
         "intptr_t"
+    shouldLintExactly
+        "exact output for (int)(long)ptr chain collapsed to (intptr_t)p"
+        "void f(void *p) { int x = (int)(long)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "void f(void * p) { int x = (intptr_t) p; }"
 
     shouldLintNotTo
         "(int)(long)ptr: intermediate (long) cast is collapsed and absent"

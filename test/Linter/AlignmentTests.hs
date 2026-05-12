@@ -69,6 +69,11 @@ testLintSizeofStoredIn32Bits =
       analyzeAlignmentIssues
       lintAlignmentIssues
       "size_t"
+    shouldLintExactly "exact output for sizeof stored in int rewrite"
+      "void f() { int n; n = sizeof(int); }"
+      analyzeAlignmentIssues
+      lintAlignmentIssues
+      "void f() { size_t n; n = sizeof(int); }"
 
 testLintHardCodedStructSizes :: Spec
 testLintHardCodedStructSizes =

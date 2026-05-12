@@ -41,6 +41,11 @@ testLintHandleTypesCastToInt =
       analyzePlatformSpecificIssues
       lintPlatformSpecificsIssues
       "intptr_t"
+    shouldLintExactly "exact output for (int)HANDLE rewrite to intptr_t"
+      "typedef void* HANDLE; int f() { HANDLE h = 0; return (int)h; }"
+      analyzePlatformSpecificIssues
+      lintPlatformSpecificsIssues
+      "typedef void * HANDLE; int f() { HANDLE h = 0; return (intptr_t) h; }"
 
 testLintHandleTypesCastToUInt :: Spec
 testLintHandleTypesCastToUInt =
@@ -50,6 +55,11 @@ testLintHandleTypesCastToUInt =
       analyzePlatformSpecificIssues
       lintPlatformSpecificsIssues
       "uintptr_t"
+    shouldLintExactly "exact output for (unsigned int)HANDLE rewrite to uintptr_t"
+      "typedef void* HANDLE; unsigned int f() { HANDLE h = 0; return (unsigned int)h; }"
+      analyzePlatformSpecificIssues
+      lintPlatformSpecificsIssues
+      "typedef void * HANDLE; unsigned int f() { HANDLE h = 0; return (uintptr_t) h; }"
 
 testLintX86SpecificCompilerIntrinsics :: Spec
 testLintX86SpecificCompilerIntrinsics =

@@ -38,8 +38,18 @@ testLintUsingIntToStoreAllocationSizes =
       analyzeMemoryAllocationIssues
       lintMemoryAllocationIssues
       "size_t"
+    shouldLintExactly "exact output for int sizeof rewrite to size_t"
+      "void f() { int n; n = sizeof(int); }"
+      analyzeMemoryAllocationIssues
+      lintMemoryAllocationIssues
+      "void f() { size_t n; n = sizeof(int); }"
     shouldLintTo "rewrites unsigned int variable storing sizeof result to size_t"
       "void f() { unsigned int n; n = sizeof(int); }"
       analyzeMemoryAllocationIssues
       lintMemoryAllocationIssues
       "size_t"
+    shouldLintExactly "exact output for unsigned int sizeof rewrite to size_t"
+      "void f() { unsigned int n; n = sizeof(int); }"
+      analyzeMemoryAllocationIssues
+      lintMemoryAllocationIssues
+      "void f() { size_t n; n = sizeof(int); }"
