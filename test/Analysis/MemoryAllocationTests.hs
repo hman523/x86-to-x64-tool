@@ -84,3 +84,30 @@ memoryAllocationSpec = describe "MemoryAllocation Analysis" $ do
             "void foo() { int sz1; int sz2; int *p; int *q; sz1 = sizeof(*p); sz2 = sizeof(*q); }"
             checkUsingIntToStoreAllocationSizes
             2
+
+    describe "edge cases" $ do
+
+        -- calloc(n, m) semantically computes n*m, but the checker sees two separate
+        -- arguments, not a multiplication expression — this tests that coverage gap.
+        shouldFlagError
+            "flags calloc(n, m) where both args are int: implicit n*m overflow risk"
+            "void foo() { int n; int m; char *p = calloc(n, m); }"
+            checkAllocationSizeCalcsMayOverflow
+
+        -- realloc with an int+int addition in the size argument
+        shouldFlagError
+            "flags realloc(ptr, a+b) where both addends are int"
+            "void foo() { void *ptr; int a; int b; ptr = realloc(ptr, a + b); }"
+            checkMallocWithoutOverflowChecking
+
+        -- Triple multiply: malloc(a * b * c) — the inner CBinary is a*b, outer is (*c)
+        shouldFlagError
+            "flags malloc(a * b * c) with all int operands: nested overflow"
+            "void foo() { int a; int b; int c; char *p = malloc(a * b * c); }"
+            checkAllocationSizeCalcsMayOverflow
+
+        -- Mixing size_t with int: size_t * int — the result is size_t so no overflow
+        shouldNotFlagError
+            "does not flag malloc(sz * sizeof(char)) where sz is unsigned long (size_t)"
+            "void foo() { unsigned long sz; char *p = malloc(sz * sizeof(char)); }"
+            checkAllocationSizeCalcsMayOverflow

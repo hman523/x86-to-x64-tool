@@ -103,3 +103,47 @@ platformSpecificsSpec = describe "PlatformSpecifics Analysis" $ do
             "chained cast: (int)(long)HANDLE still detected"
             "typedef void* HANDLE; void foo() { HANDLE h; int x = (int)(long)h; }"
             checkHandleTypesCastToInt
+
+    describe "platform edge cases" $ do
+
+        -- asm volatile is still an inline assembly block
+        shouldFlagError
+            "flags asm volatile(...) as an inline assembly block"
+            "void foo() { __asm__ __volatile__(\"nop\"); }"
+            checkAsmBlocks
+
+        -- Multiple distinct x86 registers in one asm string
+        shouldFlagError
+            "flags asm block with multiple x86 registers (ebx and ecx)"
+            "void foo() { __asm__(\"movl %%ebx, %%ecx\" : : : \"ebx\", \"ecx\"); }"
+            checkInlineAsmWithx86Instructions
+
+        -- HMODULE is a Windows handle type and should be flagged when cast to int
+        shouldFlagError
+            "flags HMODULE cast to int"
+            "typedef void* HMODULE; void foo() { HMODULE h; int x = (int)h; }"
+            checkHandleTypesCastToInt
+
+        -- HWND cast to unsigned int
+        shouldFlagError
+            "flags HWND cast to unsigned int"
+            "typedef void* HWND; void foo() { HWND w; unsigned int x = (unsigned int)w; }"
+            checkHandleTypesCastToInt
+
+        -- sizeof(long) == 4 is an incorrect assumption on LP64 platforms
+        shouldFlagError
+            "flags sizeof(long) == 4 comparison (wrong on LP64)"
+            "void foo() { if (sizeof(long) == 4) { } }"
+            checkAssumptionsAboutRegSizes
+
+        -- sizeof != 4 is also a hardcoded size assumption
+        shouldFlagError
+            "flags sizeof(int) != 4 comparison (same family of size assumption)"
+            "void foo() { if (sizeof(int) != 4) { } }"
+            checkAssumptionsAboutRegSizes
+
+        -- AVX intrinsic (use _mm256_setzero_ps with no args to avoid __m256 parse issues)
+        shouldFlagError
+            "flags _mm256_setzero_ps as x86-specific AVX intrinsic"
+            "void foo() { _mm256_setzero_ps(); }"
+            checkx86SpecificCompilerIntrinsics

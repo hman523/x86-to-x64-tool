@@ -36,7 +36,10 @@ checkWritingPtrDirectToFile ast@(CTranslUnit decls _) =
   where
     checkWrite tenv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` ioWriteFns, not (null args) =
-            let bufType = resolveTypedef tenv (typeOfExpr env (head args))
+            let bufArg  = if fname == "write" && length args >= 2
+                          then args !! 1
+                          else head args
+                bufType = resolveTypedef tenv (typeOfExpr env bufArg)
             in [ createIssue info Critical WritingPtrDirectToFile
                | isPtrToPtr bufType ]
     checkWrite _ _ _ = []
@@ -52,7 +55,10 @@ checkWritingPtrContainingStructsToFiles ast@(CTranslUnit decls _) =
   where
     checkWrite senv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` ioWriteFns, not (null args) =
-            let bufType = typeOfExpr env (head args)
+            let bufArg  = if fname == "write" && length args >= 2
+                          then args !! 1
+                          else head args
+                bufType = typeOfExpr env bufArg
             in [ createIssue info Critical WritingPtrContainingStructsToFiles
                | ptrToStructWithPtrs senv bufType ]
     checkWrite _ _ _ = []

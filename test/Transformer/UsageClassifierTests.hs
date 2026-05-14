@@ -235,3 +235,38 @@ usageClassifierSpec = describe "UsageClassifier" $ do
                 "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
                 "x" 2
                 `shouldBe` PointerType
+
+    -- -----------------------------------------------------------------------
+    -- Edge cases
+    -- -----------------------------------------------------------------------
+    describe "edge cases" $ do
+
+        it "long x initialized by (long)malloc(8) is NumberType (malloc result has unknown type)" $
+            classifyIn
+                "void f(void) { long x = (long)malloc(8); }"
+                "x"
+                `shouldBe` NumberType
+
+        it "long x used as memcpy size argument is SizeType" $
+            classifyIn
+                "void f(char *dst, char *src) { long x = 16; memcpy(dst, src, x); }"
+                "x"
+                `shouldBe` SizeType
+
+        it "long x = (long)ptr where ptr is body-local int* is PointerType" $
+            classifyIn
+                "void f(void) { int *ptr = 0; long x = (long)ptr; }"
+                "x"
+                `shouldBe` PointerType
+
+        it "long x used only as loop counter is NumberType" $
+            classifyIn
+                "void f(void) { for (long x = 0; x < 10; x++) { } }"
+                "x"
+                `shouldBe` NumberType
+
+        it "long x assigned a constant arithmetic expression is NumberType" $
+            classifyIn
+                "void f(void) { long x = 2 + 3; }"
+                "x"
+                `shouldBe` NumberType

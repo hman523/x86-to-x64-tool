@@ -119,3 +119,30 @@ functionSignaturesSpec = describe "FunctionSignatures Analysis" $ do
             "function pointer declaration with long param does not trigger checkFnsReturnPtrAsLong (only definitions are checked)"
             "typedef long (*callback_t)(void *p);"
             checkFnsReturnPtrAsLong
+
+    describe "function signature additional edge cases" $ do
+
+        -- Two va_arg(ap, int) calls in the same function: both are suspicious
+        shouldFlagNIssues
+            "two va_arg(ap, int) calls in one function produce exactly two issues"
+            "void foo(int n, ...) { __builtin_va_list ap; int a = __builtin_va_arg(ap, int); int b = __builtin_va_arg(ap, int); }"
+            checkVaargUsingWrongTypesForPtrArgs
+            2
+
+        -- va_arg extracting the correct type (int*) should not trigger the check
+        shouldNotFlagError
+            "does not flag va_arg(ap, int*) — extracting the correct pointer type"
+            "void foo(int n, ...) { __builtin_va_list ap; int *p = __builtin_va_arg(ap, int*); }"
+            checkVaargUsingWrongTypesForPtrArgs
+
+        -- Returning NULL (zero) from an int-typed function is fine
+        shouldNotFlagError
+            "does not flag returning 0 from int function (null/zero, not a pointer)"
+            "int foo() { return 0; }"
+            checkFnsReturnPtrAsInt
+
+        -- A function declared long* is not a function returning ptr-as-int
+        shouldNotFlagError
+            "does not flag function correctly declared as returning long*"
+            "long *alloc() { long *p = 0; return p; }"
+            checkFnsReturnPtrAsInt

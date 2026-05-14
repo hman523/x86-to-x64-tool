@@ -99,6 +99,51 @@ comparisonSpec = describe "Comparison Analysis" $ do
             \for (int i = 0; i < 100 && i < (end - start); i++) { } }"
             checkLoopCounterAsIntWhenIteratingOverPtrArrays
 
+    describe "comparison edge cases" $ do
+
+        -- while loop: counter is declared outside, condition has pointer subtraction
+        -- The checker only handles 'for' loops with a built-in declaration; this is a gap.
+        shouldFlagError
+            "flags int loop variable bounded by pointer subtraction in while condition"
+            "void foo() { int *start; int *end; int i = 0; while (i < (end - start)) { i++; } }"
+            checkLoopCounterAsIntWhenIteratingOverPtrArrays
+
+        -- != with non-zero literal is an invalid pointer comparison too
+        shouldFlagError
+            "flags pointer != non-zero integer literal"
+            "void foo() { int *p; if (p != 4096) { } }"
+            checkPtrComparisonWithIntConsts
+
+        -- <= with non-zero literal
+        shouldFlagError
+            "flags pointer <= non-zero integer literal"
+            "void foo() { int *p; if (p <= 4096) { } }"
+            checkPtrComparisonWithIntConsts
+
+        -- == 0 is a null check: valid, must NOT be flagged
+        shouldNotFlagError
+            "does not flag pointer == 0 (null pointer check)"
+            "void foo() { int *p; if (p == 0) { } }"
+            checkPtrComparisonWithIntConsts
+
+        -- != 0 is a non-null check: valid, must NOT be flagged
+        shouldNotFlagError
+            "does not flag pointer != 0 (non-null check)"
+            "void foo() { int *p; if (p != 0) { } }"
+            checkPtrComparisonWithIntConsts
+
+        -- fseek with a cast int offset
+        shouldFlagError
+            "flags fseek where int variable is explicitly cast before passing"
+            "void foo() { int offset; fseek(0, (int)offset, 0); }"
+            checkUsingIntForFileOffsets
+
+        -- lseek should also be caught
+        shouldFlagError
+            "flags lseek with int offset variable"
+            "void foo() { int offset; lseek(0, offset, 0); }"
+            checkUsingIntForFileOffsets
+
         shouldNotFlagError
             "long counter in compound condition is not flagged"
             "void foo() { int *start; int *end; \

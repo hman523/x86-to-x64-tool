@@ -86,3 +86,29 @@ serializationSpec = describe "Serialization Analysis" $ do
             "void foo() { int **pp; int **qq; FILE *f; fwrite(pp, sizeof(*pp), 1, f); fwrite(qq, sizeof(*qq), 1, f); }"
             checkWritingPtrDirectToFile
             2
+
+    describe "serialization edge cases" $ do
+
+        -- sendto is also in networkSendFns; verify it's covered
+        shouldFlagError
+            "flags sendto of pointer-to-pointer buffer"
+            "void foo() { int **pp; int sock; sendto(sock, pp, sizeof(*pp), 0, 0, 0); }"
+            checkSendingPtrsOverNetwork
+
+        -- write() buffer is the 2nd arg; the checker correctly uses args !! 1
+        shouldFlagError
+            "flags write() of pointer-to-pointer buffer (buf is 2nd arg)"
+            "void foo() { int **pp; int fd; write(fd, pp, sizeof(*pp)); }"
+            checkWritingPtrDirectToFile
+
+        -- send() with a plain char* buffer (non-pointer data): must NOT flag
+        shouldNotFlagError
+            "does not flag send() of a plain char* buffer (no nested pointer)"
+            "void foo() { char *buf; int sock; int len; send(sock, buf, len, 0); }"
+            checkSendingPtrsOverNetwork
+
+        -- fwrite of an address-taken int (scalar, no pointer members): must NOT flag
+        shouldNotFlagError
+            "does not flag fwrite of an int variable (plain scalar)"
+            "void foo() { int x; FILE *f; fwrite(&x, sizeof(x), 1, f); }"
+            checkWritingPtrDirectToFile

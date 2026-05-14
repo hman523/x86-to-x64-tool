@@ -24,6 +24,7 @@ typeSizeSpec = do
     testTypedefChain
     testScopedCasts
     testScopedCastsMultiIssue
+    testScopedVariableShadowing
 
 testCheckPointerToInt :: Spec
 testCheckPointerToInt = describe "Pointer to Int Casts" $ do
@@ -665,3 +666,51 @@ testScopedCastsMultiIssue = describe "Scoped multi-issue detection" $ do
             "void dirty(void *p) { int y = (int)p; } \
             \void clean(void) { int x = 5; }"
             checkLongToPointer
+
+-- ---------------------------------------------------------------------------
+-- Additional edge cases
+-- ---------------------------------------------------------------------------
+
+testScopedVariableShadowing :: Spec
+testScopedVariableShadowing = describe "Variable shadowing across scopes" $ do
+
+    -- Outer ptr, inner int with same name: outer cast is flagged, inner cast of
+    -- int-typed shadow is NOT a pointer cast.
+    shouldFlagNIssues
+        "outer ptr cast to int flagged; inner int shadow not flagged"
+        "void f(void *p) { int x = (int)p; { int p = 5; int y = (int)p; } }"
+        checkPointerToInt
+        1
+
+    -- Inner pointer shadows outer int: inner cast to int IS a pointer cast
+    shouldFlagNIssues
+        "inner pointer shadow of outer int: only the inner cast is a pointer cast"
+        "void f(void) { int p = 5; { int *p = 0; int x = (int)p; } }"
+        checkPointerToInt
+        1
+
+    -- Two different variables in two different blocks, both pointer casts
+    shouldFlagNIssues
+        "two distinct pointer variables in sibling blocks: two ptr-to-int casts"
+        "void f(int *a, int *b) { { int x = (int)a; } { int y = (int)b; } }"
+        checkPointerToInt
+        2
+
+    -- size_t x = 0: literal zero should not be flagged (it is a constant, not an int var)
+    shouldNotFlagError
+        "size_t x = 0: literal zero assignment is not flagged as UsingIntAsSizet"
+        "void f(void) { unsigned long sz = 0; }"
+        checkIntAsSizet
+
+    -- Pointer to int cast in return statement
+    shouldFlagError
+        "(int)ptr inside return statement is flagged"
+        "int f(int *p) { return (int)p; }"
+        checkPointerToInt
+
+    -- Two pointer-to-int casts in a single expression
+    shouldFlagNIssues
+        "two pointer-to-int casts in one expression produce two issues"
+        "void f(int *a, int *b) { long x = (int)a + (int)b; }"
+        checkPointerToInt
+        2

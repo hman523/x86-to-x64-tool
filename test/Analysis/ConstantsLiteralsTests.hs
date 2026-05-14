@@ -85,3 +85,59 @@ constantsLiteralsSpec = describe "ConstantsLiterals Analysis" $ do
             "void foo() { int *p = (int*)0x1000; int *q = (int*)0xDEAD; }"
             checkHardCodedAddressValues
             2
+
+    describe "edge cases" $ do
+
+        -- checkMagicValuesUsed only flags literal 4 and 8 (pointer word width on 32-/64-bit);
+        -- larger multiples are NOT flagged by this check.
+        shouldFlagError
+            "flags malloc(4) as a magic size (32-bit pointer width)"
+            "void foo() { char *p = malloc(4); }"
+            checkMagicValuesUsed
+
+        shouldFlagError
+            "flags malloc(8) as a magic size (64-bit pointer width)"
+            "void foo() { char *p = malloc(8); }"
+            checkMagicValuesUsed
+
+        shouldNotFlagError
+            "does not flag malloc(16) (not a recognised pointer-width magic number)"
+            "void foo() { char *p = malloc(16); }"
+            checkMagicValuesUsed
+
+        -- Very small constant: malloc(1) is an odd but not an architecture-width assumption
+        shouldNotFlagError
+            "does not flag malloc(1) as a magic size"
+            "void foo() { char *p = malloc(1); }"
+            checkMagicValuesUsed
+
+        -- checkBitMaskingAssuming32bitPts only flags the exact 32-bit all-ones mask 0xFFFFFFFF
+        -- applied directly to a pointer (mirrors the passing test above)
+        shouldFlagError
+            "flags pointer AND 0xFFFFFFFF (32-bit all-ones truncating mask)"
+            "void foo() { int *p; long x = (long)(p & 0xFFFFFFFF); }"
+            checkBitMaskingAssuming32bitPts
+
+        shouldNotFlagError
+            "does not flag non-pointer AND 0xFFFFFFFF"
+            "void foo() { long n = 0; long x = n & 0xFFFFFFFF; }"
+            checkBitMaskingAssuming32bitPts
+
+        -- (void*)-1 is a unary negation expression, not a CIntConst literal;
+        -- checkHardCodedAddressValues only matches CConst integer literals.
+        shouldNotFlagError
+            "does not flag (void*)-1 (unary negation, not a literal integer cast)"
+            "void foo() { void *p = (void*)-1; }"
+            checkHardCodedAddressValues
+
+        -- Casting through char*: still a hardcoded address
+        shouldFlagError
+            "flags cast of non-zero literal to char pointer"
+            "void foo() { char *p = (char*)0x8000; }"
+            checkHardCodedAddressValues
+
+        -- NULL (zero) cast to pointer is the only valid literal pointer: must NOT flag
+        shouldNotFlagError
+            "does not flag (int*)0 (explicit null pointer constant)"
+            "void foo() { int *p = (int*)0; }"
+            checkHardCodedAddressValues

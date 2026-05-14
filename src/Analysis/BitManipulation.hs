@@ -28,7 +28,7 @@ checkPackingPtrsWithFlagsInInt ast@(CTranslUnit decls _) =
     checkCast tenv env (CCast castDecl inner info) =
         let castTo = resolveTypedef tenv (typeOfDecl castDecl)
         in case (isIntType' castTo || isUIntType castTo, peelCastExpr inner) of
-            (True, CBinary COrOp l _ _) ->
+            (True, CBinary op l _ _) | op `elem` [COrOp, CXorOp] ->
                 let lt = resolveTypedef tenv (typeOfExpr env l)
                 in [ createIssue info Critical PackingPtrsWithFlagsInInt
                    | isPointer lt ]

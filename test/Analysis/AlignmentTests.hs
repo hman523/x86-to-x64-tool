@@ -99,6 +99,51 @@ alignmentSpec = describe "Alignment Analysis" $ do
             "struct Foo { int x; }; void foo() { void *p = malloc(sizeof(struct Foo)); }"
             checkHardCodedStructSizes
 
+    describe "edge cases" $ do
+
+        -- fwrite of a struct-with-pointer — parallel to fread (the fwrite describe is missing)
+        describe "checkStructContainingPtrWrittenToBinFile" $ do
+            shouldFlagError
+                "flags fwrite of struct-with-pointer-member address"
+                "struct Node { int *next; int val; }; void foo() { struct Node n; FILE *f; fwrite(&n, sizeof(n), 1, f); }"
+                checkStructContainingPtrWrittenToBinFile
+
+            shouldNotFlagError
+                "does not flag fwrite of plain int buffer"
+                "void foo() { int buf; FILE *f; fwrite(&buf, sizeof(buf), 1, f); }"
+                checkStructContainingPtrWrittenToBinFile
+
+        -- struct with a function pointer member counts as having a pointer
+        shouldFlagError
+            "flags struct with function pointer member and int member"
+            "struct Handler { void (*callback)(int); int state; };"
+            checkStructsWithMixedPtrNonPtrMembers
+
+        -- sizeof stored in unsigned int is also a truncation risk
+        shouldFlagError
+            "flags sizeof(int*) stored in unsigned int variable"
+            "void foo() { unsigned int sz; sz = sizeof(int*); }"
+            checkSizeofStoredIn32bits
+
+        -- nested struct: the outer struct has a plain int and the inner has a pointer;
+        -- the outer struct itself contains a mixed-layout embedded struct
+        shouldFlagError
+            "flags outer struct when it contains a struct member with a pointer and has its own int member"
+            "struct Inner { int *ptr; }; struct Outer { struct Inner inner; int val; };"
+            checkStructsWithMixedPtrNonPtrMembers
+
+        -- anonymous union inside a struct with a pointer member
+        shouldFlagError
+            "flags union containing a pointer member and an int member"
+            "union Variant { int *ptr; int raw; };"
+            checkUnionsContainingPtrAndInts
+
+        -- struct with only function pointers (no plain ints): should not flag mixed-members
+        shouldNotFlagError
+            "does not flag struct with only function pointer members"
+            "struct Callbacks { void (*on_open)(int); void (*on_close)(int); };"
+            checkStructsWithMixedPtrNonPtrMembers
+
     describe "checkStructContainingPtrWrittenToBinFile" $ do
         shouldFlagError
             "flags fwrite of pointer to struct with pointer member"

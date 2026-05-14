@@ -119,12 +119,12 @@ checkFormatCall tenv env (CCall (CVar (Ident fname _ _) _) args info) =
                         Just fmtStr ->
                             let specs    = parseFormatSpecs fmtStr
                                 argTypes = map (resolveTypedef tenv . typeOfExpr env) vArgs
-                            in concatMap (checkSpecAndType info) (zip specs argTypes)
+                            in concatMap (checkSpecAndType info) (zip3 [0..] specs argTypes)
 checkFormatCall _ _ _ = []
 
-checkSpecAndType :: NodeInfo -> (FmtSpec, CType) -> [Issue]
-checkSpecAndType info (FmtSpec lenMod conv, argType) =
-    [ createIssue info Warning tag | (True, tag) <- matchRules ]
+checkSpecAndType :: NodeInfo -> (Int, FmtSpec, CType) -> [Issue]
+checkSpecAndType info (specIdx, FmtSpec lenMod conv, argType) =
+    [ createFormatIssue info Warning tag specIdx | (True, tag) <- matchRules ]
   where
     isSizet   t = t == TULong || t == TUInt
     isPtrdiff t = t == TLong

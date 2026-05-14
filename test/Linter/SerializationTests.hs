@@ -58,3 +58,16 @@ testLintPtrInSharedMemory =
       analyzeSerializationIssues
       lintSerializationIssues
       [PtrInSharedMemory]
+
+    -- Edge cases
+    shouldLeaveUnresolved "leaves SendingPtrsOverNetwork via sendto unresolved"
+      "void f() { int *p = 0; sendto(0, &p, sizeof(p), 0, 0, 0); }"
+      analyzeSerializationIssues
+      lintSerializationIssues
+      [SendingPtrsOverNetwork]
+
+    shouldLeaveUnresolved "leaves WritingPtrDirectToFile via fwrite unresolved"
+      "void f(int fd) { int *p = 0; fwrite(&p, sizeof(p), 1, 0); }"
+      analyzeSerializationIssues
+      lintSerializationIssues
+      [WritingPtrDirectToFile]

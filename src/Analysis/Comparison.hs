@@ -6,6 +6,7 @@ module Analysis.Comparison
   ) where
 
 import Language.C.Syntax.AST
+import Language.C.Syntax.Constants (getCInteger)
 import Language.C.Data.Ident
 import Analysis.IssueTypes
 import Analysis.ASTTraversal
@@ -42,7 +43,11 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
             let (issues, _) = foldl (stepWalk tenv) ([], env) items
             in issues
         CIf _ t e _         -> walkStmt tenv env t ++ maybe [] (walkStmt tenv env) e
-        CWhile _ body _ _   -> walkStmt tenv env body
+        CWhile cond body _ info ->
+            (if hasPtrDiff tenv env cond && intBoundedByPtrDiff tenv env cond
+             then [createIssue info Warning LoopCounterAsIntWhenIteratingOverPtrArrays]
+             else [])
+            ++ walkStmt tenv env body
         CFor _ _ _ body _   -> walkStmt tenv env body
         _                   -> []
 
@@ -70,6 +75,17 @@ checkLoopCounterAsIntWhenIteratingOverPtrArrays ast@(CTranslUnit decls _) =
         CBinary _ l r _ -> hasPtrDiff tenv env l || hasPtrDiff tenv env r
         _               -> False
 
+    -- True when a comparison expression has an int/uint operand (indicating a
+    -- loop variable bounded by the pointer difference on the other side).
+    intBoundedByPtrDiff tenv env expr = case expr of
+        CBinary op l r _ | op `elem` [CLeOp, CGrOp, CLeqOp, CGeqOp] ->
+            let lt = resolveTypedef tenv (typeOfExpr env l)
+                rt = resolveTypedef tenv (typeOfExpr env r)
+            in isIntType' lt || isUIntType lt || isIntType' rt || isUIntType rt
+        CBinary CLndOp l r _ -> intBoundedByPtrDiff tenv env l || intBoundedByPtrDiff tenv env r
+        CBinary CLorOp l r _ -> intBoundedByPtrDiff tenv env l || intBoundedByPtrDiff tenv env r
+        _                    -> False
+
 -- | Flag ordered comparisons between a pointer and an integer constant
 --   (only eq/neq with 0 / NULL is valid).
 checkPtrComparisonWithIntConsts :: CTranslUnit -> [Issue]
@@ -86,6 +102,16 @@ checkPtrComparisonWithIntConsts ast@(CTranslUnit decls _) =
                     [createIssue info Warning PtrComparisonWithIntConsts]
                 _ -> case (isPointer rt, l) of
                     (True, CConst (CIntConst _ _)) ->
+                        [createIssue info Warning PtrComparisonWithIntConsts]
+                    _ -> []
+        | op `elem` [CEqOp, CNeqOp] =
+            let lt = resolveTypedef tenv (typeOfExpr env l)
+                rt = resolveTypedef tenv (typeOfExpr env r)
+            in case (isPointer lt, r) of
+                (True, CConst (CIntConst n _)) | getCInteger n /= 0 ->
+                    [createIssue info Warning PtrComparisonWithIntConsts]
+                _ -> case (isPointer rt, l) of
+                    (True, CConst (CIntConst n _)) | getCInteger n /= 0 ->
                         [createIssue info Warning PtrComparisonWithIntConsts]
                     _ -> []
     checkExpr _ _ _ = []

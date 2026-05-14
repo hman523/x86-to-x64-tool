@@ -62,16 +62,23 @@ walkStructDefs f (CTranslUnit decls _) = concatMap checkDecl decls
 -- ---------------------------------------------------------------------------
 
 -- | Flag structs that mix pointer and integer/long members (layout changes on 64-bit).
+--   Also flags outer structs whose embedded struct member itself contains a pointer.
 checkStructsWithMixedPtrNonPtrMembers :: CTranslUnit -> [Issue]
-checkStructsWithMixedPtrNonPtrMembers = walkStructDefs checkSU
+checkStructsWithMixedPtrNonPtrMembers ast =
+    let senv = buildStructEnv ast
+    in walkStructDefs (checkSU senv) ast
   where
-    checkSU (CStruct CStructTag _ (Just members) _ info) =
+    checkSU senv (CStruct CStructTag _ (Just members) _ info) =
         let types       = concatMap getMemberTypes members
             hasPtrs     = any isPointer types
+                          || any (memberHasNestedPtr senv) types
             hasIntTypes = any (\ t -> isIntType' t || isUIntType t || isLongType' t) types
         in [ createIssue info Warning StructsWithMixedPtrNonPtrMembers
            | hasPtrs && hasIntTypes ]
-    checkSU _ = []
+    checkSU _ _ = []
+
+    memberHasNestedPtr senv (TStruct name) = structHasPointer senv name
+    memberHasNestedPtr _ _                 = False
 
 -- | Flag unions that contain both pointer and integer members.
 checkUnionsContainingPtrAndInts :: CTranslUnit -> [Issue]
@@ -108,7 +115,10 @@ checkStructContainingPtrWrittenToBinFile ast@(CTranslUnit decls _) =
   where
     checkWrite senv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` ioWriteFns, not (null args) =
-            let bufType = typeOfExpr env (head args)
+            let bufArg  = if fname == "write" && length args >= 2
+                          then args !! 1
+                          else head args
+                bufType = typeOfExpr env bufArg
             in [ createIssue info Critical StructContainingPtrWrittenToBinFile
                | ptrToStructWithPtrs senv bufType ]
     checkWrite _ _ _ = []
@@ -121,7 +131,10 @@ checkStructContainingPtrReadFromBinFile ast@(CTranslUnit decls _) =
   where
     checkRead senv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` ioReadFns, not (null args) =
-            let bufType = typeOfExpr env (head args)
+            let bufArg  = if fname == "read" && length args >= 2
+                          then args !! 1
+                          else head args
+                bufType = typeOfExpr env bufArg
             in [ createIssue info Critical StructContainingPtrReadFromBinFile
                | ptrToStructWithPtrs senv bufType ]
     checkRead _ _ _ = []

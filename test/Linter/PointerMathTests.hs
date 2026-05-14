@@ -275,3 +275,22 @@ testLintScopedVariableShadowing =
         "void f(int *arr, int *p, int *q) { int i = 0; arr[i]; { int i; i = p - q; } }"
         analyzePointerMathIssues
         lintPointerMathIssues
+
+    -- Edge cases
+    shouldFullyLint
+        "pointer difference stored in unsigned int is fully resolved"
+        "void f(int *a, int *b) { unsigned int d; d = a - b; }"
+        analyzePointerMathIssues
+        lintPointerMathIssues
+
+    shouldFullyLint
+        "array index stored in unsigned int is fully resolved"
+        "void f(int *arr) { unsigned int i = 2; int x = arr[i]; }"
+        analyzePointerMathIssues
+        lintPointerMathIssues
+
+    shouldLeaveUnresolved "leaves PointerAddOverflow unresolved"
+        "void f(int *base) { int n = 5; int *p = base + n; }"
+        analyzePointerMathIssues
+        lintPointerMathIssues
+        [PointerAddOverflow]

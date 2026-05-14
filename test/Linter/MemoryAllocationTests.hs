@@ -53,3 +53,16 @@ testLintUsingIntToStoreAllocationSizes =
       analyzeMemoryAllocationIssues
       lintMemoryAllocationIssues
       "void f() { size_t n; n = sizeof(int); }"
+
+    -- Edge cases
+    shouldLeaveUnresolved "leaves AllocationSizeCalcsMayOverflow unresolved for malloc(n*m)"
+      "void f() { int n = 10; int m = 4; void *p = malloc(n * m); }"
+      analyzeMemoryAllocationIssues
+      lintMemoryAllocationIssues
+      [AllocationSizeCalcsMayOverflow]
+
+    shouldLeaveUnresolved "leaves MallocWithoutOverflowChecking unresolved for malloc(a+b)"
+      "void f() { int a = 4; int b = 8; void *p = malloc(a + b); }"
+      analyzeMemoryAllocationIssues
+      lintMemoryAllocationIssues
+      [MallocWithoutOverflowChecking]

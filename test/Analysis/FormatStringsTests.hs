@@ -140,3 +140,49 @@ formatStringsSpec = describe "FormatStrings Analysis" $ do
             "flags and width with correct %ld for long: not flagged when correct specifier used"
             "void foo() { int n; printf(\"%+5d\\n\", n); }"
             checkldUsedWithLongAssuming64bits
+
+    describe "printf-family variant edge cases" $ do
+
+        -- fprintf is in fmtArgIndex at index 1; first arg is the FILE*
+        shouldFlagError
+            "flags %d with pointer in fprintf"
+            "void foo() { int *p; fprintf(0, \"%d\", p); }"
+            checkdUsedWithPtr
+
+        -- sprintf has format string at index 1; first arg is the buffer
+        shouldFlagError
+            "flags %d with pointer in sprintf"
+            "void foo() { int *p; char buf[64]; sprintf(buf, \"%d\", p); }"
+            checkdUsedWithPtr
+
+        -- snprintf has format string at index 2
+        shouldFlagError
+            "flags %d with pointer in snprintf"
+            "void foo() { int *p; char buf[64]; snprintf(buf, 64, \"%d\", p); }"
+            checkdUsedWithPtr
+
+        -- %p is the correct specifier for pointers — must NOT flag
+        shouldNotFlagError
+            "does not flag printf with %p and pointer argument (correct specifier)"
+            "void foo() { int *p; printf(\"%p\", p); }"
+            checkdUsedWithPtr
+
+        -- %% escape: the doubled percent is NOT a format specifier and must not
+        -- consume an argument slot, so the real %d is the only issue
+        shouldFlagNIssues
+            "printf with '%%' escape before real %d: only one issue (the %d), not two"
+            "void foo() { int *p; printf(\"%%d %d\", p); }"
+            checkdUsedWithPtr
+            1
+
+        -- Width specified but conversion is still wrong
+        shouldFlagError
+            "flags %10d with pointer (width modifier does not suppress the issue)"
+            "void foo() { int *p; printf(\"%10d\", p); }"
+            checkdUsedWithPtr
+
+        -- Already-correct %zd should not be flagged for size_t
+        shouldNotFlagError
+            "does not flag printf with %zd and size_t argument (already correct)"
+            "void foo() { unsigned long sz; printf(\"%zd\", sz); }"
+            checkdUsedWithSizet

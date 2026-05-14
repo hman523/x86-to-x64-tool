@@ -50,3 +50,20 @@ formatSpecParserSpec = describe "FormatSpecParser" $ do
         it "hh does not consume more than two h's" $
             let (m, r) = parseLenMod "hhhn"
             in (m, r) `shouldBe` ("hh", "hn")
+
+    describe "parseLenMod edge cases" $ do
+
+        it "single 'l' before a complex format tail is parsed correctly" $
+            parseLenMod "l10d rest" `shouldBe` ("l", "10d rest")
+
+        it "'z' modifier does not get doubled or altered" $
+            parseLenMod "zu" `shouldBe` ("z", "u")
+
+        it "'t' modifier parses correctly before 'd'" $
+            parseLenMod "td" `shouldBe` ("t", "d")
+
+        it "bare 'L' before 'g' is parsed as one character" $
+            parseLenMod "Lg" `shouldBe` ("L", "g")
+
+        it "returns empty modifier when input starts with digit (width, not modifier)" $
+            parseLenMod "10d rest" `shouldBe` ("", "10d rest")

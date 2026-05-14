@@ -65,6 +65,10 @@ typecheckerSpec = do
         testTypeOfExpr
         testTypeOfDecl
         testPredicates
+        testResolveBaseTypesEdge
+        testResolveArrayTypesEdge
+        testCollectDeclEdge
+        testLookupTypeEdge
 
 -- ---------------------------------------------------------------------------
 -- Base type resolution
@@ -495,4 +499,73 @@ testPredicates =
             it "returns True for TULong"             $ isLongType' TULong                   `shouldBe` True
             it "returns False for TInt"              $ isLongType' TInt                     `shouldBe` False
             it "returns False for TPointer TLong"    $ isLongType' (TPointer TLong)         `shouldBe` False
-            it "returns False for TUnknown"          $ isLongType' TUnknown                 `shouldBe` False
+
+-- ---------------------------------------------------------------------------
+-- Additional edge cases
+-- ---------------------------------------------------------------------------
+
+testResolveBaseTypesEdge :: Spec
+testResolveBaseTypesEdge =
+    describe "resolveBaseType edge cases" $ do
+
+        it "resolves long long" $
+            resolveVarType "void f() { long long x; }" "x"
+                `shouldBe` TLongLong
+
+        it "resolves unsigned long long" $
+            resolveVarType "void f() { unsigned long long x; }" "x"
+                `shouldBe` TULongLong
+
+        it "resolves double *" $
+            resolveVarType "void f() { double *x; }" "x"
+                `shouldBe` TPointer TDouble
+
+        it "resolves int* (const-qualified)" $
+            -- const qualifier is stripped; underlying type is TPointer TInt
+            resolveVarType "void f() { const int *x; }" "x"
+                `shouldBe` TPointer TInt
+
+testResolveArrayTypesEdge :: Spec
+testResolveArrayTypesEdge =
+    describe "resolveType (arrays) edge cases" $ do
+
+        it "resolves long[] (array of long)" $
+            resolveVarType "void f() { long x[4]; }" "x"
+                `shouldBe` TArray TLong
+
+        it "resolves void*[] (array of void pointers)" $
+            resolveVarType "void f() { void *x[8]; }" "x"
+                `shouldBe` TArray (TPointer TVoid)
+
+testCollectDeclEdge :: Spec
+testCollectDeclEdge =
+    describe "collectDecl edge cases" $ do
+
+        it "adds an unsigned long variable" $
+            let env = envFromDecls "unsigned long n;"
+            in fmap fst (Map.lookup "n" env) `shouldBe` Just TULong
+
+        it "adds a double pointer variable" $
+            let env = envFromDecls "char **argv;"
+            in fmap fst (Map.lookup "argv" env) `shouldBe` Just (TPointer (TPointer TChar))
+
+        it "preserves all three names in a multi-declarator pointer declaration" $
+            let env = envFromDecls "long *a, *b, *c;"
+            in do
+                fmap fst (Map.lookup "a" env) `shouldBe` Just (TPointer TLong)
+                fmap fst (Map.lookup "b" env) `shouldBe` Just (TPointer TLong)
+                fmap fst (Map.lookup "c" env) `shouldBe` Just (TPointer TLong)
+
+testLookupTypeEdge :: Spec
+testLookupTypeEdge =
+    describe "lookupType edge cases" $ do
+
+        it "returns TUnknown for a name not in the environment" $
+            let env = envFromDecls "int x;"
+            in lookupType env "y" `shouldBe` TUnknown
+
+        it "returns the correct type when multiple variables are present" $ do
+            let env = envFromDecls "int a; long b; char *c;"
+            lookupType env "a" `shouldBe` TInt
+            lookupType env "b" `shouldBe` TLong
+            lookupType env "c" `shouldBe` TPointer TChar

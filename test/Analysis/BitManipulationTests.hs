@@ -84,3 +84,50 @@ bitManipulationSpec = describe "BitManipulation Analysis" $ do
             "void foo() { int *p; int *q; int flags; int a = (int)(p | flags); int b = (int)(q | flags); }"
             checkPackingPtrsWithFlagsInInt
             2
+
+    describe "edge cases" $ do
+
+        -- XOR is semantically equivalent to OR for pointer-packing: upper bits are still lost
+        shouldFlagError
+            "flags (int)(ptr ^ flags): XOR of pointer and flags cast to int"
+            "void foo() { int *p; int flags; int packed = (int)(p ^ flags); }"
+            checkPackingPtrsWithFlagsInInt
+
+        shouldNotFlagError
+            "does not flag (int)(a ^ b) where both operands are int"
+            "void foo() { int a; int b; int c = (int)(a ^ b); }"
+            checkPackingPtrsWithFlagsInInt
+
+        -- Shift by a compile-time constant (not a variable) on a pointer
+        shouldFlagError
+            "flags pointer left-shift by a literal constant"
+            "void foo() { int *p; long x = p << 3; }"
+            checkBitShiftsOnPtr
+
+        shouldFlagError
+            "flags pointer right-shift by a literal constant"
+            "void foo() { int *p; long x = p >> 8; }"
+            checkBitShiftsOnPtr
+
+        -- Casting the result to long rather than int should NOT flag extracting-bits check
+        shouldNotFlagError
+            "does not flag (long)(ptr >> n): cast to long does not truncate pointer bits"
+            "void foo() { int *p; int n; long x = (long)(p >> n); }"
+            checkExtractingPtrBitsIn32BitVar
+
+        -- AND on a pointer is a separate check (checkBitMaskingAssuming32bitPts), not here
+        shouldNotFlagError
+            "does not flag (int)(ptr & ~flags): AND is not shift/pack, handled elsewhere"
+            "void foo() { int *p; int flags; int x = (int)(p & ~flags); }"
+            checkBitShiftsOnPtr
+
+        -- Extracting bits from the high end of a 64-bit pointer
+        shouldFlagError
+            "flags extracting high 32 bits of pointer: (unsigned int)(ptr >> 32)"
+            "void foo() { int *p; unsigned int hi = (unsigned int)(p >> 32); }"
+            checkExtractingPtrBitsIn32BitVar
+
+        shouldFlagError
+            "flags extracting bits via shift amount 48"
+            "void foo() { int *p; int bits = (int)(p >> 48); }"
+            checkExtractingPtrBitsIn32BitVar

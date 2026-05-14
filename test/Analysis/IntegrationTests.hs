@@ -2,7 +2,7 @@ module Analysis.IntegrationTests where
 
 import Test.Hspec
 import qualified Data.ByteString.Char8 as BS
-import Parser.Parser (parseSource)
+import Parser.Parser (parseSource, parseSourceString)
 import Analysis.Analysis (analysis)
 import Analysis.AnalysisTestUtils
 import Analysis.IssueTypes
@@ -200,3 +200,18 @@ integrationSpec = do
             case parseSource everythingAtOnce of
               Left err  -> fail $ show err
               Right ast -> length (analysis ast) `shouldSatisfy` (>= 38)
+
+    describe "clean code edge cases" $ do
+        it "minimal correct C file produces zero issues" $ do
+            let src = "int add(int a, int b) { return a + b; }\n\
+                      \int main(void) { int x = add(1, 2); return 0; }\n"
+            case parseSourceString src of
+              Left  err -> fail $ show err
+              Right ast -> length (analysis ast) `shouldBe` 0
+
+        it "pointer arithmetic using ptrdiff_t produces no issues" $ do
+            let src = "int f(int *a, int *b) { \
+                      \  long diff = (long)(a - b); return (int)diff; }\n"
+            case parseSourceString src of
+              Left  err -> fail $ show err
+              Right ast -> length (analysis ast) `shouldSatisfy` (<= 1)

@@ -397,3 +397,29 @@ testLintScopedVariableShadowing =
         analyzeTypeSizeIssues
         lintTypeSizeIssues
         "intptr_t"
+
+    -- Edge cases
+    shouldFullyLint
+        "(int)ptr in return statement is fully resolved"
+        "int f(int *p) { return (int)p; }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "two pointer-to-int casts in two sibling blocks: both fully resolved"
+        "void f(int *p) { { int a = (int)p; } { int b = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "unsigned int passed to malloc in a helper function is fully resolved"
+        "void f() { unsigned int sz = 64; void *p = malloc(sz); }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldLintTo
+        "unsigned int passed to malloc rewrite uses size_t"
+        "void f() { unsigned int sz = 64; void *p = malloc(sz); }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "size_t"

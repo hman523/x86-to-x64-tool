@@ -4,6 +4,7 @@ import Test.Hspec
 import Linter.LinterTestsUtils
 import Linter.FormatStrings
 import Analysis.FormatStrings
+import Analysis.IssueTypes (IssueTag(..))
 
 formatStringsLintSpec :: Spec
 formatStringsLintSpec = describe "FormatStrings Linting" $ do
@@ -270,6 +271,25 @@ testFormatStringsIntegration =
     shouldFullyLint
       "resolves %d in snprintf (format arg at index 2)"
       "void foo() { char buf[64]; int *p; snprintf(buf, 64, \"%d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
+
+    -- Edge cases
+    shouldFullyLint
+      "leaves %% escape intact while fixing surrounding %d for pointer"
+      "void foo() { int *p; printf(\"%%d %d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
+
+    shouldFullyLint
+      "fixes %d with width specifier for pointer"
+      "void foo() { int *p; printf(\"%10d\", p); }"
+      analyzeFormatStringIssues
+      lintFormatStringsIssues
+
+    shouldFullyLint
+      "fixes second %d for pointer in mixed printf call (first %d for int stays)"
+      "void foo() { int *p; int n; printf(\"%d %d\", n, p); }"
       analyzeFormatStringIssues
       lintFormatStringsIssues
 

@@ -90,7 +90,7 @@ tryFixFmtSpec :: (String, Char) -> (String, Char)
               -> CTranslUnit -> Issue -> (CTranslUnit, Maybe Issue)
 tryFixFmtSpec old new ast issue
     | hasPatchableFmt (issuePos issue) ast =
-        (fixFmtSpec (issuePos issue) old new ast, Nothing)
+        (fixFmtSpec (issuePos issue) old new (issueSpecIdx issue) ast, Nothing)
     | otherwise = (ast, Just issue)
 
 -- | True when the AST contains a printf-family call at the given position
@@ -111,14 +111,16 @@ hasPatchableFmt targetInfo = everything (||) (mkQ False check)
     isStrLit _                        = False
 
 -- | Walk the entire AST with 'everywhere', find the CCall at the given source
--- position, and patch the format string literal by replacing the first
--- specifier matching (oldLen, oldConv) with (newLen, newConv).
+-- position, and patch the format string literal by replacing the specifier at
+-- @mSpecIdx@ (0-based index among all format specifiers in the string).
+-- Falls back to replacing the first matching specifier when no index is stored.
 fixFmtSpec :: NodeInfo
            -> (String, Char)   -- ^ (oldLenMod, oldConv)
            -> (String, Char)   -- ^ (newLenMod, newConv)
+           -> Maybe Int         -- ^ specifier index from Issue
            -> CTranslUnit
            -> CTranslUnit
-fixFmtSpec targetInfo (oldLen, oldConv) (newLen, newConv) =
+fixFmtSpec targetInfo (oldLen, oldConv) (newLen, newConv) mSpecIdx =
     everywhere (mkT fixCall)
   where
     fixCall :: CExpression NodeInfo -> CExpression NodeInfo
@@ -131,7 +133,11 @@ fixFmtSpec targetInfo (oldLen, oldConv) (newLen, newConv) =
     fixCall expr = expr
 
     patchFmt (CConst (CStrConst (CString s wide) ni)) =
-        CConst (CStrConst (CString (replaceFmtSpecOnce oldLen oldConv newLen newConv s) wide) ni)
+        CConst (CStrConst (CString patched wide) ni)
+      where
+        patched = case mSpecIdx of
+            Just n  -> replaceFmtSpecAt n oldLen oldConv newLen newConv s
+            Nothing -> replaceFmtSpecOnce oldLen oldConv newLen newConv s
     patchFmt e = e
 
 -- ---------------------------------------------------------------------------
@@ -169,5 +175,33 @@ replaceFmtSpecOnce oldLen oldConv newLen newConv = go False
                 | otherwise ->
                     -- Not the specifier we want; keep it and keep looking
                     flags ++ width ++ prec ++ lenMod ++ [c] ++ go False r
+
+-- | Replace the format specifier at 0-based position @targetIdx@ (counting
+-- all specifiers, not just matching ones) with @(newLen, newConv)@.
+-- The old specifier at that position is expected to be @(oldLen, oldConv)@.
+-- '%%' escape sequences are not counted.
+replaceFmtSpecAt :: Int -> String -> Char -> String -> Char -> String -> String
+replaceFmtSpecAt targetIdx oldLen oldConv newLen newConv = go 0
+  where
+    go _ [] = []
+    go n ('%':'%':rest) = '%' : '%' : go n rest
+    go n ('%':rest)     = '%' : handleSpec n rest
+    go n (c:rest)       = c   : go n rest
+
+    handleSpec n s =
+        let (flags, s1)    = span (`elem` "-+ #0") s
+            (width, s2)    = span (`elem` "0123456789") s1
+            (prec,  s3)    = case s2 of
+                                 ('.':r) -> let (p, r') = span (`elem` "0123456789") r
+                                            in ('.' : p, r')
+                                 _       -> ("", s2)
+            (lenMod, s4)   = parseLenMod s3
+        in case s4 of
+            []    -> flags ++ width ++ prec ++ lenMod
+            (c:r)
+                | n == targetIdx && lenMod == oldLen && c == oldConv ->
+                    flags ++ width ++ prec ++ newLen ++ [newConv] ++ r
+                | otherwise ->
+                    flags ++ width ++ prec ++ lenMod ++ [c] ++ go (n+1) r
 
 

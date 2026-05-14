@@ -6,6 +6,7 @@ module Analysis.IssueTypes
   , getCategory
   , createIssue
   , createIssueWithDecl
+  , createFormatIssue
   , issueType
   , category
   , issueSeverity
@@ -204,6 +205,8 @@ data Issue = Issue
     , issueSeverity :: Severity
     , issueType     :: IssueTag
     , category      :: Category
+    , issueSpecIdx  :: Maybe Int   -- ^ For format-string issues: 0-based index of the
+                                   --   format specifier within the format string.
     }
 
 instance Show Issue where
@@ -295,10 +298,13 @@ prettyPrintIssues verbose useColor termWidth issues =
     in unlines $ zipWith (curry fmt) [(1::Int)..] issues
 
 createIssue :: NodeInfo -> Severity -> IssueTag -> Issue
-createIssue pos sev tag = Issue pos Nothing sev tag (getCategory tag)
+createIssue pos sev tag = Issue pos Nothing sev tag (getCategory tag) Nothing
 
 createIssueWithDecl :: NodeInfo -> Maybe NodeInfo -> Severity -> IssueTag -> Issue
-createIssueWithDecl pos mDeclPos sev tag = Issue pos mDeclPos sev tag (getCategory tag)
+createIssueWithDecl pos mDeclPos sev tag = Issue pos mDeclPos sev tag (getCategory tag) Nothing
+
+createFormatIssue :: NodeInfo -> Severity -> IssueTag -> Int -> Issue
+createFormatIssue pos sev tag idx = Issue pos Nothing sev tag (getCategory tag) (Just idx)
 
 -- | One-sentence explanation of why each issue matters for x86-to-x64 migration.
 describeIssue :: IssueTag -> String

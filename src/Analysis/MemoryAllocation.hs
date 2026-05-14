@@ -21,6 +21,8 @@ analyzeMemoryAllocationIssues ast =
 
 -- | Flag malloc/calloc/realloc where the size argument is a multiplication of
 --   two int-typed values (product may overflow before widening to size_t).
+--   Also flags calloc(nmemb, size) where both arguments are int-typed, since
+--   the implicit product may overflow on 32-bit targets.
 checkAllocationSizeCalcsMayOverflow :: CTranslUnit -> [Issue]
 checkAllocationSizeCalcsMayOverflow ast@(CTranslUnit decls _) =
     let tenv = buildTypedefEnv ast
@@ -29,6 +31,7 @@ checkAllocationSizeCalcsMayOverflow ast@(CTranslUnit decls _) =
     checkAlloc tenv env (CCall (CVar (Ident fname _ _) _) args info)
         | fname `elem` allocFns =
             concatMap (checkSizeExpr tenv env info) args
+            ++ checkCallocIntArgs tenv env info fname args
     checkAlloc _ _ _ = []
 
     checkSizeExpr tenv env callInfo (CBinary CMulOp l r _) =
@@ -37,6 +40,14 @@ checkAllocationSizeCalcsMayOverflow ast@(CTranslUnit decls _) =
         in [ createIssue callInfo Critical AllocationSizeCalcsMayOverflow
            | (isIntType' lt || isUIntType lt) && (isIntType' rt || isUIntType rt) ]
     checkSizeExpr _ _ _ _ = []
+
+    -- calloc(nmemb, size) with two int args: the implicit product may overflow
+    checkCallocIntArgs tenv env callInfo "calloc" [arg1, arg2] =
+        let t1 = resolveTypedef tenv (typeOfExpr env arg1)
+            t2 = resolveTypedef tenv (typeOfExpr env arg2)
+        in [ createIssue callInfo Critical AllocationSizeCalcsMayOverflow
+           | (isIntType' t1 || isUIntType t1) && (isIntType' t2 || isUIntType t2) ]
+    checkCallocIntArgs _ _ _ _ _ = []
 
 -- | Flag malloc/calloc/realloc where the size arg is an integer addition
 --   without overflow protection (sum can wrap before reaching size_t width).

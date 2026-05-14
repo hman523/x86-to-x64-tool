@@ -120,3 +120,35 @@ pointerMathSpec = describe "PointerMath Analysis" $ do
             "void foo() { int arr[4][4][4]; int i; int j; int k; int x = arr[i][j][k]; }"
             checkArrayIndexingIntInArrayOver2tothe31size
             3
+
+    describe "pointer math edge cases" $ do
+
+        -- Pointer diff stored in unsigned int is also truncated (same issue as int)
+        shouldFlagError
+            "flags pointer subtraction result stored in unsigned int"
+            "void foo() { char *a; char *b; unsigned int diff; diff = a - b; }"
+            checkPtrDiffStoredAs32bit
+
+        -- Pointer arithmetic as a function call argument: overflow risk still present
+        shouldFlagError
+            "flags pointer + int passed as function argument"
+            "void bar(int *p) {} void foo() { int *base; int n; bar(base + n); }"
+            checkPtrAddOverflow
+
+        -- Computed array index expression (not just a plain variable)
+        shouldFlagError
+            "flags arr[(i+j)] where i and j are int: sum may wrap before indexing"
+            "void foo() { int arr[100]; int i; int j; int x = arr[i + j]; }"
+            checkArrayIndexingIntInArrayOver2tothe31size
+
+        -- Pointer subtraction in a ternary expression: still unsafe
+        shouldFlagError
+            "flags pointer - unsigned int in ternary condition branch"
+            "void foo() { int *p; unsigned int n; int flag; int *q = flag ? p - n : p; }"
+            checkPtrSubUnderflow
+
+        -- Pointer diff stored in a local initialized directly (not assignment)
+        shouldFlagError
+            "flags int diff = p1 - p2 (initializer form, not assignment)"
+            "void foo() { int *a; int *b; int diff = a - b; }"
+            checkPtrDiffStoredAs32bit

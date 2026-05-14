@@ -83,3 +83,16 @@ testLintHardCodedStructSizes =
       analyzeAlignmentIssues
       lintAlignmentIssues
       [HardCodedStructSizes]
+
+    -- Edge cases
+    shouldLeaveUnresolved "leaves StructContainingPtrWrittenToBinFile unresolved"
+      "struct S { int *p; void *q; }; void f() { struct S s; FILE *fp; fwrite(&s, sizeof(s), 1, fp); }"
+      analyzeAlignmentIssues
+      lintAlignmentIssues
+      [StructContainingPtrWrittenToBinFile]
+
+    shouldLintTo "rewrites int variable storing sizeof result to size_t (edge: unsigned int)"
+      "void f() { unsigned int n; n = sizeof(long); }"
+      analyzeAlignmentIssues
+      lintAlignmentIssues
+      "size_t"
