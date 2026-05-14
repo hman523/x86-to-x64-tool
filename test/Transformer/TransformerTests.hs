@@ -871,13 +871,18 @@ transformerSpec = describe "Transformer" $ do
             "int32_t"
 
     -- -------------------------------------------------------------------
-    -- Scoping: variable name shadowing (flat name-based classification)
-    --   classifyVar uses listify across the whole function, so pointer
-    --   evidence in the inner 'x' bleeds into the outer 'x' of the same name.
+    -- Scoping: variable name shadowing (scope-aware classification)
+    --   classifyVar now tracks which specific declaration is in scope,
+    --   so inner-scope evidence for 'x' no longer bleeds into an outer 'x'.
     -- -------------------------------------------------------------------
-    describe "variable name shadowing (flat name-based classification)" $ do
+    describe "variable name shadowing (scope-aware classification)" $ do
         shouldTransformToContain
-            "outer long x = 42 reclassified to intptr_t by inner-scope pointer use of same name"
+            "outer long x = 42 stays int32_t even when inner scope has same name with pointer"
+            "void f(void *p) { long x = 42; { long x = (long)p; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "inner long x = (long)p classified independently -> intptr_t"
             "void f(void *p) { long x = 42; { long x = (long)p; } }"
             "intptr_t"
 
@@ -890,6 +895,90 @@ transformerSpec = describe "Transformer" $ do
         shouldTransformToContain
             "inner long b = (long)p -> intptr_t independently of outer long a"
             "void f(void *p) { long a = 42; { long b = (long)p; } }"
+            "intptr_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: same-named long in parallel if/else branches
+    --   Each branch declares its own 'x'; evidence in one must not
+    --   affect the classification of the other.
+    -- -------------------------------------------------------------------
+    describe "same-named long in parallel if/else branches" $ do
+        shouldTransformToContain
+            "if-branch long x = (long)p -> intptr_t"
+            "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "else-branch long x = 42 -> int32_t even when if-branch has pointer x"
+            "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "if-branch long x = sizeof(int) -> size_t"
+            "void f(int c) { if (c) { long x = sizeof(int); } else { long x = 0; } }"
+            "size_t"
+
+        shouldTransformToContain
+            "else-branch long x = 0 -> int32_t when if-branch has size_t x"
+            "void f(int c) { if (c) { long x = sizeof(int); } else { long x = 0; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "both if-branch and else-branch have long x = sizeof(int) -> both size_t"
+            "void f(int c) { if (c) { long x = sizeof(int); } else { long x = sizeof(int); } }"
+            "size_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: outer long with inner same-named long in nested blocks
+    -- -------------------------------------------------------------------
+    describe "outer long with inner same-name in nested blocks" $ do
+        shouldTransformToContain
+            "outer long x = sizeof(int) -> size_t; inner long x = 42 -> int32_t (both present)"
+            "void f(void) { long x = sizeof(int); { long x = 42; } }"
+            "size_t"
+
+        shouldTransformToContain
+            "inner long x = 42 -> int32_t even when outer x has size_t"
+            "void f(void) { long x = sizeof(int); { long x = 42; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "outer long n = 0 -> int32_t, inner long n = sizeof(int) in while body -> size_t"
+            "void f(int c) { long n = 0; while (c) { long n = sizeof(int); } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "inner long n = sizeof(int) in while body -> size_t, outer n stays int32_t"
+            "void f(int c) { long n = 0; while (c) { long n = sizeof(int); } }"
+            "size_t"
+
+        shouldTransformToContain
+            "outer long x = (long)p -> intptr_t, inner long x = 42 in for body -> int32_t"
+            "void f(void *p, int n) { long x = (long)p; for (int i=0; i<n; i++) { long x = 42; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "inner long x = 42 in for body -> int32_t, outer x = (long)p stays intptr_t"
+            "void f(void *p, int n) { long x = (long)p; for (int i=0; i<n; i++) { long x = 42; } }"
+            "int32_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: three levels of same-name nesting -> three different types
+    -- -------------------------------------------------------------------
+    describe "three-level same-name nesting" $ do
+        shouldTransformToContain
+            "outermost long x = 0 -> int32_t (three-level same-name)"
+            "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "middle long x = sizeof(int) -> size_t (three-level same-name)"
+            "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
+            "size_t"
+
+        shouldTransformToContain
+            "innermost long x = (long)p -> intptr_t (three-level same-name)"
+            "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
             "intptr_t"
 
     -- -------------------------------------------------------------------
@@ -937,3 +1026,120 @@ transformerSpec = describe "Transformer" $ do
             "global long assigned from (long)fn() returning int* -> intptr_t"
             "int *alloc(void); long g; void f(void) { g = (long)alloc(); }"
             "intptr_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: same-named long in if/else branches classified independently
+    -- -------------------------------------------------------------------
+    describe "same-named long in if/else branches classified independently" $ do
+        shouldTransformToContain
+            "long x in if-branch (pointer) -> intptr_t; else-branch (literal) -> int32_t both present"
+            "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "long x in else-branch (literal) -> int32_t alongside if-branch intptr_t"
+            "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "long x in if-branch (sizeof) -> size_t; else-branch (literal) -> int32_t"
+            "void f(int c) { if (c) { long x = sizeof(int); } else { long x = 0; } }"
+            "size_t"
+
+        shouldTransformToContain
+            "long x in else-branch (literal) -> int32_t alongside if-branch size_t"
+            "void f(int c) { if (c) { long x = sizeof(int); } else { long x = 0; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "long x in if-branch (ptr-diff) -> ptrdiff_t; else-branch (sizeof) -> size_t"
+            "void f(int *a, int *b, int c) { if (c) { long x = a - b; } else { long x = sizeof(int); } }"
+            "ptrdiff_t"
+
+        shouldTransformToContain
+            "long x in else-branch (sizeof) -> size_t alongside if-branch ptrdiff_t"
+            "void f(int *a, int *b, int c) { if (c) { long x = a - b; } else { long x = sizeof(int); } }"
+            "size_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: same-named long in successive blocks classified independently
+    -- -------------------------------------------------------------------
+    describe "same-named long in successive blocks classified independently" $ do
+        shouldTransformToContain
+            "first block long x (literal) -> int32_t; second block long x (pointer) both present"
+            "void f(void *p) { { long x = 42; } { long x = (long)p; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "second block long x (pointer) -> intptr_t alongside first block int32_t"
+            "void f(void *p) { { long x = 42; } { long x = (long)p; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "first block long x (sizeof) -> size_t; second block long x (ptr-diff) -> ptrdiff_t"
+            "void f(int *a, int *b) { { long x = sizeof(int); } { long x = a - b; } }"
+            "size_t"
+
+        shouldTransformToContain
+            "second block long x (ptr-diff) -> ptrdiff_t alongside first block size_t"
+            "void f(int *a, int *b) { { long x = sizeof(int); } { long x = a - b; } }"
+            "ptrdiff_t"
+
+        shouldTransformToContain
+            "three successive blocks: long x (literal), (sizeof), (pointer) each classified correctly"
+            "void f(void *p) { { long x = 42; } { long x = sizeof(int); } { long x = (long)p; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "three successive blocks: int32_t present alongside size_t and intptr_t"
+            "void f(void *p) { { long x = 42; } { long x = sizeof(int); } { long x = (long)p; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "three successive blocks: size_t present alongside int32_t and intptr_t"
+            "void f(void *p) { { long x = 42; } { long x = sizeof(int); } { long x = (long)p; } }"
+            "size_t"
+
+    -- -------------------------------------------------------------------
+    -- Scoping: outer long shadowed by same-named inner long in nested block
+    -- -------------------------------------------------------------------
+    describe "outer long shadowed by inner long in nested block" $ do
+        shouldTransformToContain
+            "outer long x (literal) -> int32_t; inner long x (sizeof) -> size_t"
+            "void f(void) { long x = 42; { long x = sizeof(int); } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "inner long x (sizeof) -> size_t alongside outer long x int32_t"
+            "void f(void) { long x = 42; { long x = sizeof(int); } }"
+            "size_t"
+
+        shouldTransformToContain
+            "outer long x (literal) -> int32_t; inner long x (ptr-diff) -> ptrdiff_t"
+            "void f(int *a, int *b) { long x = 42; { long x = a - b; } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "inner long x (ptr-diff) -> ptrdiff_t alongside outer long x int32_t"
+            "void f(int *a, int *b) { long x = 42; { long x = a - b; } }"
+            "ptrdiff_t"
+
+        shouldTransformToContain
+            "outer long x (sizeof) -> size_t; inner long x (pointer) -> intptr_t"
+            "void f(void *p) { long x = sizeof(int); { long x = (long)p; } }"
+            "size_t"
+
+        shouldTransformToContain
+            "inner long x (pointer) -> intptr_t alongside outer long x size_t"
+            "void f(void *p) { long x = sizeof(int); { long x = (long)p; } }"
+            "intptr_t"
+
+        shouldTransformToContain
+            "function param long x (literal use) -> int32_t; inner long x (sizeof) -> size_t"
+            "void f(long x) { { long x = sizeof(int); } }"
+            "int32_t"
+
+        shouldTransformToContain
+            "inner long x (sizeof) -> size_t when param long x -> int32_t"
+            "void f(long x) { { long x = sizeof(int); } }"
+            "size_t"

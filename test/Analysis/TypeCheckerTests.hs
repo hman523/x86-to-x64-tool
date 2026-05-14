@@ -60,6 +60,8 @@ typecheckerSpec = do
         testResolveArrayTypes
         testCollectDecl
         testBuildTypeEnv
+        testBuildTypeEnvScoping
+        testBuildTypeEnvScopingExtended
         testTypeOfExpr
         testTypeOfDecl
         testPredicates
@@ -227,6 +229,95 @@ testBuildTypeEnv =
         it "returns empty env for empty function body" $
             let env = envFromFunctionBody "void f() {}"
             in Map.size env `shouldBe` 0
+
+-- ---------------------------------------------------------------------------
+-- buildTypeEnv scoping
+-- ---------------------------------------------------------------------------
+
+testBuildTypeEnvScoping :: Spec
+testBuildTypeEnvScoping =
+    describe "buildTypeEnv scoping" $ do
+
+        it "inner-block declaration does not appear in flat top-level env" $
+            let env = envFromFunctionBody "void f() { { long x; } }"
+            in Map.lookup "x" env `shouldBe` Nothing
+
+        it "outer declaration visible even when inner block re-declares same name" $
+            let env = envFromFunctionBody "void f() { int x; { long x; } }"
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
+
+        it "variable declared only in if-block body is not in flat env" $
+            let env = envFromFunctionBody "void f(int c) { if (c) { long y; } }"
+            in Map.lookup "y" env `shouldBe` Nothing
+
+        it "variable declared only in while-body is not in flat env" $
+            let env = envFromFunctionBody "void f(int c) { while (c) { int n; } }"
+            in Map.lookup "n" env `shouldBe` Nothing
+
+        it "variable declared only in for-body is not in flat env" $
+            let env = envFromFunctionBody
+                        "void f() { for (int i = 0; i < 1; i++) { long tmp; } }"
+            in Map.lookup "tmp" env `shouldBe` Nothing
+
+        it "outer declarations before and after a nested block are both in flat env" $
+            let env = envFromFunctionBody "void f() { int a; { long x; } long b; }"
+            in do
+                fmap fst (Map.lookup "a" env) `shouldBe` Just TInt
+                fmap fst (Map.lookup "b" env) `shouldBe` Just TLong
+
+        it "lookupType returns TUnknown for variable declared only in an inner block" $
+            let env = envFromFunctionBody "void f() { { int inner; } int outer; }"
+            in lookupType env "inner" `shouldBe` TUnknown
+
+        it "inner-scope re-declaration does not overwrite outer type in flat env" $
+            let env = envFromFunctionBody "void f() { long x; if (1) { int x; } }"
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TLong
+
+-- ---------------------------------------------------------------------------
+-- buildTypeEnv scoping (extended)
+-- ---------------------------------------------------------------------------
+
+testBuildTypeEnvScopingExtended :: Spec
+testBuildTypeEnvScopingExtended =
+    describe "buildTypeEnv scoping (extended)" $ do
+
+        it "parameter re-declared in inner block: flat env shows parameter type" $
+            let env = envFromFunctionBody "void f(long x) { { int x; } }"
+            -- Parameters are not in the body's flat env (buildTypeEnv only
+            -- scans the CCompound items, not the declarator), so the inner
+            -- re-declaration is also absent from the flat body env.
+            in Map.lookup "x" env `shouldBe` Nothing
+
+        it "two successive inner blocks re-declaring same name: flat env has outer type" $
+            let env = envFromFunctionBody "void f() { int x; { long x; } { char x; } }"
+            in fmap fst (Map.lookup "x" env) `shouldBe` Just TInt
+
+        it "for-loop init variable is not in the flat outer env" $
+            let env = envFromFunctionBody
+                        "void f() { for (long i = 0; i < 10; i++) { } }"
+            in Map.lookup "i" env `shouldBe` Nothing
+
+        it "variable declared inside a switch case is not in the flat outer env" $
+            let env = envFromFunctionBody
+                        "void f(int c) { switch (c) { case 1: { long y = 0; break; } } }"
+            in Map.lookup "y" env `shouldBe` Nothing
+
+        it "variables in if-body and else-body are both absent from flat outer env" $
+            let env = envFromFunctionBody
+                        "void f(int c) { if (c) { long a; } else { int b; } }"
+            in do
+                Map.lookup "a" env `shouldBe` Nothing
+                Map.lookup "b" env `shouldBe` Nothing
+
+        it "while-body re-declaration of same name does not shadow outer in flat env" $
+            let env = envFromFunctionBody
+                        "void f() { long n = 0; while (1) { int n; break; } }"
+            in fmap fst (Map.lookup "n" env) `shouldBe` Just TLong
+
+        it "deeply nested variable (if inside while) is absent from flat outer env" $
+            let env = envFromFunctionBody
+                        "void f(int c) { while (c) { if (c > 0) { long deep; } } }"
+            in Map.lookup "deep" env `shouldBe` Nothing
 
 -- ---------------------------------------------------------------------------
 -- typeOfExpr

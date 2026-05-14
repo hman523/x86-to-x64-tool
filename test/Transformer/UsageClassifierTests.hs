@@ -2,9 +2,11 @@ module Transformer.UsageClassifierTests where
 
 import Test.Hspec
 import Data.Generics        (listify)
+import Data.Maybe           (listToMaybe)
 import qualified Data.Map.Strict as Map
 import Language.C.Syntax.AST
 import Language.C.Data.Node  (NodeInfo)
+import Language.C.Data.Ident (Ident(..))
 
 import Parser.Parser           (parseSourceString)
 import Transformer.UsageClassifier
@@ -12,6 +14,9 @@ import Analysis.TypeChecker    (TypeEnv, buildTypeEnv, collectDecl, typeOfExpr)
 
 -- | Parse C source, extract the first function definition, build a TypeEnv
 --   from its body, and classify the given variable name.
+--   Finds the NodeInfo of the first declaration of @varName@ in the function
+--   (covering both parameters and body-local declarations) so that the
+--   scope-aware classifier knows which binding to track.
 classifyIn :: String -> String -> AbstractType
 classifyIn src varName =
     case parseSourceString src of
@@ -22,7 +27,46 @@ classifyIn src varName =
                 env = case body of
                         CCompound _ items _ -> buildTypeEnv items Map.empty
                         _                   -> Map.empty
-            in classifyVar env varName fd
+                allDecls = listify (const True) fd :: [CDeclaration NodeInfo]
+                mDeclNi  = listToMaybe
+                    [ ni
+                    | CDecl _ declrs _ <- allDecls
+                    , (Just (CDeclr (Just (Ident n _ _)) _ _ _ ni), _, _) <- declrs
+                    , n == varName ]
+            in case mDeclNi of
+                Just ni -> classifyVar env ni varName fd
+                Nothing -> NumberType
+
+-- | Parse C source, extract the first function definition, and classify the
+--   Nth declaration (0-indexed) of @varName@ (in AST traversal order).
+--   This lets tests target specific declarations when the same name is used
+--   in multiple nested scopes.
+classifyNthIn :: String -> String -> Int -> AbstractType
+classifyNthIn src varName n =
+    case parseSourceString src of
+        Left err  -> error (show err)
+        Right ast ->
+            let funDefs = listify (const True) ast :: [CFunctionDef NodeInfo]
+                fd@(CFunDef _ (CDeclr _ derived _ _ _) _ body _) = head funDefs
+                paramEnv = foldr collectDecl Map.empty (concatMap getParams derived)
+                env = case body of
+                        CCompound _ items _ -> buildTypeEnv items paramEnv
+                        _                   -> paramEnv
+                allDecls = listify (const True) fd :: [CDeclaration NodeInfo]
+                matchingNis =
+                    [ ni
+                    | CDecl _ declrs _ <- allDecls
+                    , (Just (CDeclr (Just (Ident nm _ _)) _ _ _ ni), _, _) <- declrs
+                    , nm == varName ]
+                mDeclNi = if n < length matchingNis
+                          then Just (matchingNis !! n)
+                          else Nothing
+            in case mDeclNi of
+                Just ni -> classifyVar env ni varName fd
+                Nothing -> NumberType
+  where
+    getParams (CFunDeclr (Right (ps, _)) _ _) = ps
+    getParams _                               = []
 
 -- | Parse C source containing a single expression in an assignment to a
 --   dummy variable, extract that expression, and return its rhsEvidence.
@@ -135,3 +179,59 @@ usageClassifierSpec = describe "UsageClassifier" $ do
                     let funDefs = listify (const True) ast :: [CFunctionDef NodeInfo]
                     in classifyVarAcrossFuns Map.empty "x" funDefs
                         `shouldBe` NumberType
+
+    describe "scope-aware classifyVar: variable name shadowing" $ do
+
+        it "if-branch long x = (long)p is PointerType, independent of else-branch long x = 42" $
+            classifyNthIn
+                "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+                "x" 0
+                `shouldBe` PointerType
+
+        it "else-branch long x = 42 is NumberType, independent of if-branch long x = (long)p" $
+            classifyNthIn
+                "void f(void *p, int c) { if (c) { long x = (long)p; } else { long x = 42; } }"
+                "x" 1
+                `shouldBe` NumberType
+
+        it "outer long x = 42 is NumberType even when inner block has long x = (long)p" $
+            classifyIn
+                "void f(void *p) { long x = 42; { long x = (long)p; } }"
+                "x"
+                `shouldBe` NumberType
+
+        it "inner long x = (long)p is PointerType even though outer long x = 42" $
+            classifyNthIn
+                "void f(void *p) { long x = 42; { long x = (long)p; } }"
+                "x" 1
+                `shouldBe` PointerType
+
+        it "outer long x = sizeof(int) is SizeType even when inner block has long x = 42" $
+            classifyIn
+                "void f(void) { long x = sizeof(int); { long x = 42; } }"
+                "x"
+                `shouldBe` SizeType
+
+        it "inner long x = 42 is NumberType even though outer long x = sizeof(int)" $
+            classifyNthIn
+                "void f(void) { long x = sizeof(int); { long x = 42; } }"
+                "x" 1
+                `shouldBe` NumberType
+
+        it "three-level nesting: outermost long x = 0 is NumberType" $
+            classifyIn
+                "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
+                "x"
+                `shouldBe` NumberType
+
+        it "three-level nesting: middle long x = sizeof(int) is SizeType" $
+            classifyNthIn
+                "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
+                "x" 1
+                `shouldBe` SizeType
+
+        it "three-level nesting: innermost long x = (long)p is PointerType" $
+            classifyNthIn
+                "void f(void *p) { long x = 0; { long x = sizeof(int); { long x = (long)p; } } }"
+                "x" 2
+                `shouldBe` PointerType

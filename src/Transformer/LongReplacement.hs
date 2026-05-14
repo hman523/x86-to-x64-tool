@@ -79,7 +79,7 @@ applyToFunDef globalEnv funDef ast rmap0 =
     in foldl (\(a, rm) (name, ni, isU, isCompBase) ->
             let cls     = if isCompBase
                           then NumberType   -- pointer/array-of-long: preserve base type
-                          else classifyVar env name funDef
+                          else classifyVar env ni name funDef
                 newSpec = toSpec isU cls
             in (retypeDecl ni newSpec a, Map.insert name newSpec rm)
         ) (ast, rmap0) vars

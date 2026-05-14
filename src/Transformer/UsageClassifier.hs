@@ -18,8 +18,9 @@ module Transformer.UsageClassifier
 import Data.Generics        (listify)
 import Data.Maybe           (maybeToList)
 import Language.C.Syntax.AST
-import Language.C.Data.Node  (NodeInfo)
-import Language.C.Data.Ident (Ident(..))
+import Language.C.Data.Node     (NodeInfo)
+import Language.C.Data.Ident    (Ident(..))
+import Language.C.Data.Position (posOf)
 
 import Analysis.TypeChecker (TypeEnv, CType(..), typeOfExpr, buildTypeEnv, collectDecl)
 import Analysis.KnownFunctions (sizeArgFunctions)
@@ -50,18 +51,157 @@ stronger a b = if priority a >= priority b then a else b
 -- Entry point
 -- ---------------------------------------------------------------------------
 
--- | Classify @name@ by scanning every expression and declaration initializer
---   in @funDef@ for usage evidence.  Falls back to 'NumberType' when no
---   evidence is found.
-classifyVar :: TypeEnv -> String -> CFunctionDef NodeInfo -> AbstractType
-classifyVar env name funDef =
-    let exprEvidence = concatMap (evidenceFromExprNode env name)
-                           (listify (const True) funDef :: [CExpression NodeInfo])
-        declEvidence = concatMap (evidenceFromDeclNode env name)
-                           (listify (const True) funDef :: [CDeclaration NodeInfo])
-        evidence     = exprEvidence ++ declEvidence
+-- | Classify a specific @long@ declaration (identified by @declNi@) by
+--   collecting usage evidence only within the scope where that declaration
+--   is live.  Inner-scope redeclarations of the same @name@ correctly shadow
+--   the target so their evidence does not bleed into the outer variable.
+--   Falls back to 'NumberType' when no evidence is found.
+classifyVar :: TypeEnv -> NodeInfo -> String -> CFunctionDef NodeInfo -> AbstractType
+classifyVar env declNi name funDef =
+    let evidence = collectFunEvidence env name declNi funDef
     in if null evidence then NumberType
        else foldr1 stronger evidence
+
+-- ---------------------------------------------------------------------------
+-- Scope-aware traversal
+-- ---------------------------------------------------------------------------
+
+-- | Walk the function body collecting evidence for the declaration at
+--   @targetNi@.  If that NodeInfo matches a parameter the variable is in
+--   scope from the very start of the body; otherwise it becomes in scope
+--   once its @CBlockDecl@ is encountered.
+collectFunEvidence :: TypeEnv -> String -> NodeInfo -> CFunctionDef NodeInfo -> [AbstractType]
+collectFunEvidence env name targetNi (CFunDef _ (CDeclr _ derived _ _ _) _ body _) =
+    let params       = concatMap getParams derived
+        startInScope = any (matchesTargetDecl targetNi) params
+    in walkStmt env name targetNi startInScope body
+  where
+    getParams (CFunDeclr (Right (ps, _)) _ _) = ps
+    getParams _                               = []
+
+-- | Walk a statement, threading the in-scope flag.
+walkStmt :: TypeEnv -> String -> NodeInfo -> Bool -> CStatement NodeInfo -> [AbstractType]
+walkStmt env name targetNi inScope stmt = case stmt of
+    CCompound _ items _ ->
+        walkItems env name targetNi inScope items
+
+    CExpr (Just e) _ ->
+        if inScope then allExprEvidence env name e else []
+
+    CIf cond thenS elseS _ ->
+        (if inScope then allExprEvidence env name cond else [])
+        ++ walkStmt env name targetNi inScope thenS
+        ++ maybe [] (walkStmt env name targetNi inScope) elseS
+
+    CWhile cond body _ _ ->
+        (if inScope then allExprEvidence env name cond else [])
+        ++ walkStmt env name targetNi inScope body
+
+    -- CFor init can introduce a new declaration that shadows `name`.
+    -- The resulting inScope' is local to the for-loop (cond/incr/body).
+    CFor initOrDecl cond incr body _ ->
+        let (initEv, inScope') = case initOrDecl of
+              Left (Just e) ->
+                  (if inScope then allExprEvidence env name e else [], inScope)
+              Left Nothing ->
+                  ([], inScope)
+              Right decl
+                | declaresName name decl ->
+                    let ev = if matchesTargetDecl targetNi decl
+                             then evidenceFromDeclNode env name decl
+                             else []
+                    in (ev, matchesTargetDecl targetNi decl)
+                | otherwise -> ([], inScope)
+        in initEv
+           ++ maybe [] (\e -> if inScope' then allExprEvidence env name e else []) cond
+           ++ maybe [] (\e -> if inScope' then allExprEvidence env name e else []) incr
+           ++ walkStmt env name targetNi inScope' body
+
+    CSwitch e body _ ->
+        (if inScope then allExprEvidence env name e else [])
+        ++ walkStmt env name targetNi inScope body
+
+    CLabel _ s _ _ ->
+        walkStmt env name targetNi inScope s
+
+    CCase e s _ ->
+        (if inScope then allExprEvidence env name e else [])
+        ++ walkStmt env name targetNi inScope s
+
+    CCases e1 e2 s _ ->
+        ( if inScope
+          then allExprEvidence env name e1 ++ allExprEvidence env name e2
+          else [] )
+        ++ walkStmt env name targetNi inScope s
+
+    CDefault s _ ->
+        walkStmt env name targetNi inScope s
+
+    CReturn (Just e) _ ->
+        if inScope then allExprEvidence env name e else []
+
+    CGotoPtr e _ ->
+        if inScope then allExprEvidence env name e else []
+
+    _ -> []
+
+-- | Walk compound block items, flipping the in-scope flag whenever a
+--   declaration for @name@ is encountered: True if it is our target,
+--   False if it is a shadowing declaration.
+walkItems :: TypeEnv -> String -> NodeInfo -> Bool -> [CCompoundBlockItem NodeInfo] -> [AbstractType]
+walkItems _   _    _        _       [] = []
+walkItems env name targetNi inScope (item:rest) = case item of
+    CBlockDecl decl
+        | declaresName name decl ->
+            let ev       = if matchesTargetDecl targetNi decl
+                           then evidenceFromDeclNode env name decl
+                           else []
+                inScope' = matchesTargetDecl targetNi decl
+            in ev ++ walkItems env name targetNi inScope' rest
+        | otherwise ->
+            -- This declaration doesn't declare `name`, but its initializer
+            -- expressions may contain usage patterns for `name` (e.g. y = x & 0xFF).
+            (if inScope then declExprEvidence env name decl else [])
+            ++ walkItems env name targetNi inScope rest
+    CBlockStmt stmt ->
+        walkStmt env name targetNi inScope stmt
+        ++ walkItems env name targetNi inScope rest
+    CNestedFunDef _ ->
+        walkItems env name targetNi inScope rest
+
+-- | Apply 'evidenceFromExprNode' to every sub-expression of @expr@,
+--   preserving the listify-based unnesting the evidence functions expect.
+allExprEvidence :: TypeEnv -> String -> CExpression NodeInfo -> [AbstractType]
+allExprEvidence env name expr =
+    concatMap (evidenceFromExprNode env name)
+              (listify (const True) expr :: [CExpression NodeInfo])
+
+-- | Collect evidence from all expressions embedded in a CDeclaration that
+--   does not itself declare @name@: covers initializer expressions, array
+--   size expressions, etc.
+declExprEvidence :: TypeEnv -> String -> CDeclaration NodeInfo -> [AbstractType]
+declExprEvidence env name decl =
+    concatMap (evidenceFromExprNode env name)
+              (listify (const True) decl :: [CExpression NodeInfo])
+
+-- | True when @decl@ contains a declarator whose source position matches
+--   @targetNi@.
+matchesTargetDecl :: NodeInfo -> CDeclaration NodeInfo -> Bool
+matchesTargetDecl targetNi (CDecl _ declrs _) =
+    any match declrs
+  where
+    match (Just (CDeclr _ _ _ _ dNi), _, _) = posOf dNi == posOf targetNi
+    match _                                  = False
+matchesTargetDecl _ _ = False
+
+-- | True when @decl@ has at least one declarator named @name@.
+declaresName :: String -> CDeclaration NodeInfo -> Bool
+declaresName name (CDecl _ declrs _) =
+    any match declrs
+  where
+    match (Just (CDeclr (Just (Ident n _ _)) _ _ _ _), _, _) = n == name
+    match _                                                   = False
+declaresName _ _ = False
 
 -- ---------------------------------------------------------------------------
 -- Expression-level evidence

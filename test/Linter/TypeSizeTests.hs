@@ -23,6 +23,7 @@ typeSizeLintSpec = describe "TypeSize Linting" $ do
   testLintMultiple
   testLintScopedIssues
   testLintChainedCasts
+  testLintScopedVariableShadowing
 
 
 testLintCastPointerToInt :: Spec
@@ -292,3 +293,107 @@ testLintChainedCasts =
         analyzeTypeSizeIssues
         lintTypeSizeIssues
         "uintptr_t"
+
+-- | Tests verifying that same-named variables in different scopes are
+--   analysed and linted independently when the issue is a cast.
+testLintScopedVariableShadowing :: Spec
+testLintScopedVariableShadowing =
+  describe "scoped variable shadowing: independent TypeSize linting" $ do
+
+    -- If-branch has (int)ptr cast; else-branch has a plain int literal.
+    -- Only the cast expression should be flagged.
+    it "only if-branch cast (int)ptr is flagged: exactly one issue found" $ do
+      let code = "void f(void *p, int c) \
+                 \{ if (c) { int x = (int)p; } else { int x = 5; } }"
+      case parseSourceString code of
+        Left err  -> fail (show err)
+        Right ast -> length (analyzeTypeSizeIssues ast) `shouldBe` 1
+
+    shouldLintTo
+        "(int)ptr cast in if-branch is fixed to intptr_t"
+        "void f(void *p, int c) { if (c) { int x = (int)p; } else { int x = 5; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
+
+    -- Both branches have a (int)ptr cast: both are fully resolved.
+    shouldFullyLint
+        "(int)ptr cast in both if and else branches: both issues fully resolved"
+        "void f(void *p, int c) { if (c) { int x = (int)p; } else { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    -- Outer int x has no cast issue; inner same-named int x does.
+    it "only inner int x (cast) is flagged when outer int x is plain: one issue" $ do
+      let code = "void f(void *p) { int x = 5; { int x = (int)p; } }"
+      case parseSourceString code of
+        Left err  -> fail (show err)
+        Right ast -> length (analyzeTypeSizeIssues ast) `shouldBe` 1
+
+    shouldFullyLint
+        "(int)ptr cast in inner scope fully resolved; outer plain int x unaffected"
+        "void f(void *p) { int x = 5; { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    -- Three successive inner scoped blocks each with a (int)ptr cast.
+    shouldFullyLint
+        "(int)ptr cast in three successive scoped blocks: all three issues resolved"
+        "void f(void *p) \
+        \{ { int x = (int)p; } { int x = (int)p; } { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    -- Parallel branches using different cast types: each fixed independently.
+    shouldLintTo
+        "(int)ptr in if-branch and (unsigned int)ptr in else-branch: both fixed"
+        "void f(void *p, int c) { if (c) { int x = (int)p; } else { unsigned int x = (unsigned int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
+
+    shouldLintTo
+        "(unsigned int)ptr in else-branch also fixed alongside (int)ptr in if-branch"
+        "void f(void *p, int c) { if (c) { int x = (int)p; } else { unsigned int x = (unsigned int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "uintptr_t"
+
+    -- Outer 'int x' has no cast issue; only the inner 'int x = (int)p' should
+    -- be retyped. The outer variable must keep its plain 'int' type.
+    it "two successive inner int x blocks: only the block with cast is flagged (one issue)" $ do
+      let code = "void f(void *p) { { int x = 5; } { int x = (int)p; } }"
+      case parseSourceString code of
+        Left err  -> fail (show err)
+        Right ast -> length (analyzeTypeSizeIssues ast) `shouldBe` 1
+
+    shouldFullyLint
+        "two successive inner int x blocks both with (int)ptr cast: both issues fixed"
+        "void f(void *p) { { int x = (int)p; } { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldFullyLint
+        "unsigned int in if-branch and int in else-branch with casts: both fully fixed"
+        "void f(void *p, int c) { if (c) { unsigned int x = (unsigned int)p; } else { int x = (int)p; } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    it "inner scope (int)ptr cast + outer int x plain: exactly one issue detected" $ do
+      let code = "void f(void *p) { int x; { int x = (int)p; } }"
+      case parseSourceString code of
+        Left err  -> fail (show err)
+        Right ast -> length (analyzeTypeSizeIssues ast) `shouldBe` 1
+
+    shouldFullyLint
+        "(int)ptr cast three levels deep (if inside while inside for) is fully fixed"
+        "void f(void *p, int n) { for (int i = 0; i < n; i++) { while (i > 0) { if (i > 1) { int x = (int)p; } } } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+
+    shouldLintTo
+        "(int)ptr in deeply nested block produces intptr_t in output"
+        "void f(void *p, int n) { for (int i = 0; i < n; i++) { while (i > 0) { if (i > 1) { int x = (int)p; } } } }"
+        analyzeTypeSizeIssues
+        lintTypeSizeIssues
+        "intptr_t"
