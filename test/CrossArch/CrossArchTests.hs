@@ -44,10 +44,17 @@ imageName = "x86-to-x64-test-env"
 containerName :: String
 containerName = "x86-to-x64-test-runner"
 
--- | Directory (relative to project root / container workdir) where
+-- | Base directory (relative to project root / container workdir) where
 --   per-file compilation results are written by batch scripts.
-resultsDir :: String
-resultsDir = "test/c_progs/cross_arch/.results"
+resultsDirBase :: String
+resultsDirBase = "test/c_progs/cross_arch/.results"
+
+-- | Return a results-directory path that is unique to this OS process,
+--   so that concurrent @cabal test@ invocations do not share result files.
+makeResultsDir :: IO String
+makeResultsDir = do
+    (_, pidOut, _) <- readProcessWithExitCode "sh" ["-c", "echo $PPID"] ""
+    return $ resultsDirBase ++ "." ++ strip pidOut
 
 -- | Trim leading/trailing whitespace.
 strip :: String -> String
@@ -132,8 +139,7 @@ podmanExec cmd =
 
 -- | Remove the results directory from the bind mount.
 cleanupResults :: FilePath -> IO ()
-cleanupResults projectRoot = do
-    let dir = projectRoot ++ "/" ++ resultsDir
+cleanupResults dir = do
     exists <- doesDirectoryExist dir
     when exists $ removeDirectoryRecursive dir
 
@@ -154,30 +160,30 @@ compileFragment file flags outFile ecFile tag = concat
 
 -- | Batch compile+run every file as both 32-bit and 64-bit in a single exec.
 --   All compilations run in parallel.  Results are written to files under
---   'resultsDir' on the bind mount.
-batchCompileOriginals :: [FilePath] -> IO ()
-batchCompileOriginals files = do
-    let script = "mkdir -p " ++ resultsDir ++ "; " ++ concatMap oneFile files
+--   @rd@ on the bind mount.
+batchCompileOriginals :: String -> [FilePath] -> IO ()
+batchCompileOriginals rd files = do
+    let script = "mkdir -p " ++ rd ++ "; " ++ concatMap oneFile files
                  ++ "wait"
         oneFile f = let b = takeBaseName f
                     in  compileFragment f "-m32" (rp b ".m32.out") (rp b ".m32.ec") (b ++ "_32")
                      ++ compileFragment f "-m64" (rp b ".m64.out") (rp b ".m64.ec") (b ++ "_64")
-        rp base suffix = resultsDir ++ "/" ++ base ++ suffix
+        rp base suffix = rd ++ "/" ++ base ++ suffix
     _ <- podmanExec script
     return ()
 
 -- | Batch compile+run every transformed file as 64-bit in a single exec.
 --   All compilations run in parallel.
 --   Takes a list of @(baseName, transformedRelPath)@ pairs.
-batchCompileTransformed :: [(String, FilePath)] -> IO ()
-batchCompileTransformed pairs = do
+batchCompileTransformed :: String -> [(String, FilePath)] -> IO ()
+batchCompileTransformed rd pairs = do
     let script = concatMap oneFile pairs ++ "wait"
         oneFile (b, f) = concat
             [ "{ gcc -m64 -o /tmp/prog_tr_", b, " ", f, " 2>", rp b ".tr.err"
             , " && /tmp/prog_tr_", b, " > ", rp b ".tr.out", " 2>&1; "
             , "printf '%d' $? > ", rp b ".tr.ec", "; } & "
             ]
-        rp base suffix = resultsDir ++ "/" ++ base ++ suffix
+        rp base suffix = rd ++ "/" ++ base ++ suffix
     _ <- podmanExec script
     return ()
 
@@ -189,14 +195,15 @@ batchCompileTransformed pairs = do
 --   supplied 'IORef'.  After this returns, result files exist on disk for
 --   every test file and the 'IORef' holds the transform outcome.
 runBatchPhases :: FilePath
+              -> String
               -> [FilePath]
               -> IORef [(FilePath, Either String ())]
               -> IO ()
-runBatchPhases projectRoot cFiles transformRef = do
+runBatchPhases projectRoot rd cFiles transformRef = do
     startContainer projectRoot
 
     -- Phase 1: batch compile+run all originals (m32 + m64) — one exec.
-    batchCompileOriginals cFiles
+    batchCompileOriginals rd cFiles
 
     -- Phase 2: transform every file on the host (no container needed).
     trs <- mapM (\f -> do
@@ -213,7 +220,7 @@ runBatchPhases projectRoot cFiles transformRef = do
 
     -- Phase 3: batch compile+run all successful transformations — one exec.
     let pairs = [ (takeBaseName f, f ++ ".x64.c") | (f, Right _) <- trs ]
-    when (not (null pairs)) $ batchCompileTransformed pairs
+    when (not (null pairs)) $ batchCompileTransformed rd pairs
 
 -- ---------------------------------------------------------------------------
 -- Top-level spec
@@ -243,30 +250,34 @@ crossArchSpec = describe "Cross-architecture semantic equivalence" $ do
                     , not (".x64.c" `isSuffixOf` f)
                     ]
 
+            -- Generate a unique results directory for this test run so that
+            -- concurrent @cabal test@ invocations do not share result files.
+            rd <- runIO makeResultsDir
+
             -- IORef to hold per-file transform outcomes (filled by runBatchPhases).
             transformRef <- runIO $ newIORef []
 
             -- Run all container work up-front; tear down on completion.
-            beforeAll_ (runBatchPhases projectRoot cFiles transformRef) $
-              afterAll_ (stopContainer >> cleanupResults projectRoot) $ do
+            beforeAll_ (runBatchPhases projectRoot rd cFiles transformRef) $
+              afterAll_ (stopContainer >> cleanupResults (projectRoot ++ "/" ++ rd)) $ do
 
                 forM_ cFiles $ \relPath ->
                     it (relPath ++ " preserves 32-bit behaviour after transformation") $ do
                         let b   = takeBaseName relPath
-                            rd sfx = readStrict
-                                (projectRoot ++ "/" ++ resultsDir ++ "/" ++ b ++ sfx)
+                            readResult sfx = readStrict
+                                (projectRoot ++ "/" ++ rd ++ "/" ++ b ++ sfx)
                             toEC s = if strip s == "0" then ExitSuccess
                                                        else ExitFailure 1
 
                         -- Check step 1 (32-bit) result
-                        ec32 <- toEC <$> rd ".m32.ec"
+                        ec32 <- toEC <$> readResult ".m32.ec"
                         ec32 `shouldBe` ExitSuccess
-                        out32 <- strip <$> rd ".m32.out"
+                        out32 <- strip <$> readResult ".m32.out"
 
                         -- Check step 2 (64-bit untransformed) result
-                        ec64 <- toEC <$> rd ".m64.ec"
+                        ec64 <- toEC <$> readResult ".m64.ec"
                         ec64 `shouldBe` ExitSuccess
-                        out64 <- strip <$> rd ".m64.out"
+                        out64 <- strip <$> readResult ".m64.out"
 
                         out32 `shouldNotBe` out64
 
@@ -276,13 +287,13 @@ crossArchSpec = describe "Cross-architecture semantic equivalence" $ do
                             Just (Left err) -> expectationFailure $
                                 "Transformation failed for " ++ relPath ++ ": " ++ err
                             Just (Right ()) -> do
-                                ecTr <- toEC <$> rd ".tr.ec"
+                                ecTr <- toEC <$> readResult ".tr.ec"
                                 case ecTr of
                                     ExitSuccess -> do
-                                        outTr <- strip <$> rd ".tr.out"
+                                        outTr <- strip <$> readResult ".tr.out"
                                         outTr `shouldBe` out32
                                     _ -> do
-                                        errTr <- rd ".tr.err"
+                                        errTr <- readResult ".tr.err"
                                         expectationFailure $
                                             "Compilation of transformed file failed:\n" ++ errTr
                             Nothing -> expectationFailure
