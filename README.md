@@ -67,6 +67,7 @@ Options:
   --cpp        Run the C preprocessor (gcc) before parsing
   --strict     Exit with non-zero status on any issue (including warnings)
   --no-color   Disable colored output
+  --diff       Print a colored diff of all changes (use with -t or -l)
   -h, --help   Show this help message
 
 Note: -t and -l cannot be used together.
